@@ -19,6 +19,7 @@ const PUBLIC_ENTRIES = [
   "references",
   "templates",
   "evals",
+  "docs/release-audit-4.0.0.md",
 ];
 
 const joined = (...parts) => parts.join("");

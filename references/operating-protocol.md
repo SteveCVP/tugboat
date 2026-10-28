@@ -6,12 +6,14 @@
 2. Requirement capture
 3. Compiled execution and claims
 4. Architecture decision compilation
-5. Slicing and execution
-6. Multi-worker candidate promotion
-7. Proof model
-8. Reviews and defects
-9. Deployment and completion
-10. Failure patterns
+5. Mission intelligence compilation
+6. Proof runtime
+7. Slicing and execution
+8. Multi-worker candidate promotion
+9. Proof model
+10. Reviews and defects
+11. Deployment and completion
+12. Failure patterns
 
 ## 1. Authority And Change Control
 
@@ -142,7 +144,88 @@ earn it and must expose integration, staffing, deployment, observability, and se
 costs. Do not add a language merely because it is locally fashionable or scores well on
 an unallocated requirement. The compiler never mutates mission or repository state.
 
-## 5. Slicing And Execution
+## 5. Mission Intelligence Compilation
+
+Intelligence reports are deterministic, canonical, read-only decision artifacts. They
+can block a choice or define work; they cannot implement a requirement, execute a gate,
+or prove an outcome. Preserve each report digest with the decision it informed.
+
+Use the compilers in causal order:
+
+1. Run `tugboat intelligence lint --dir tugboat --json --gate` after genesis and any
+   material amendment. Fix vague oracles, fake gates, scope laundering, ornamental or
+   duplicate architecture, placeholder proof, and unsupported confidence before coding.
+2. Before selecting tests for changed code, run `intelligence impact` with explicit
+   Git base/head and an ownership profile. Unmapped changes are insufficient evidence;
+   do not optimize around them.
+3. Feed the verified impact report to `intelligence portfolio`. Its exact minimum-cost
+   gate set has `planStatus: not_executed`; run the gates and capture fresh evidence.
+4. Compile `intelligence adversary` to turn acceptance into empty, malformed,
+   duplicate, stale, unauthorized, partial, concurrent, out-of-order, dependency-error,
+   and rollback contracts. Generated cases are test obligations, not passing results.
+5. Run `intelligence freshness` with an explicit observation time before reusing proof.
+   Age, volatility, amendments, deployment SHA drift, or impact invalidation can reopen it.
+6. Run `intelligence simulate` before release. Every applicable failure journey needs
+   observable detection, containment, recovery gates, and a rollback action.
+7. Run `intelligence trust` before `intelligence route`. Sensitivity, authority, cycle,
+   clearance, capacity, and current third-party capability attestations are hard
+   constraints; cost and latency rank only eligible workers. The routing profile must
+   list trusted attestation issuers, and a supplied trust report must contain the
+   worker's declared `type: worker` node. Routing never dispatches.
+8. Use `intelligence memory` only with explicit decision-record and context files.
+   Reuse requires exact context, production evidence, non-contradictory outcomes, no
+   supersession, and live assumptions whose half-life remains above policy.
+9. Use `intelligence federation` for a multi-mission release. Declared child summaries,
+   compatibility contracts, dependency waves, rollback waves, readiness, and digests
+   must all close; one incomplete child blocks the train.
+
+Federation validates declared summaries and digest shape/consistency; it does not fetch
+or cryptographically attest remote child repositories. The caller must verify each
+child state/report digest at its source before compiling the manifest.
+
+The CLI exposes all ten operations and `--gate` exits nonzero on `blocked` or
+`insufficient_evidence`. The MCP `tugboat_intelligence` tool exposes only the eight
+mission-local operations with the mission and repository fixed at process startup.
+Decision memory and federation remain explicit-file CLI/CI operations so a model cannot
+select arbitrary cross-mission paths. Use the least-privilege CI template in
+`templates/github/tugboat-intelligence.yml` for pull-request gates.
+
+## 6. Proof Runtime
+
+Use proof-runtime commands only where they answer a concrete requirement question:
+
+1. Run `proof mutate` on critical gates when a false negative would authorize a
+   consequential release. Mutations name exact tracked text and execute one at a time
+   in disposable detached worktrees. A survivor is a weak-gate defect. An invalid
+   mutation is insufficient evidence. Neither outcome mutates the source worktree.
+2. Use `capsule capture` when execution evidence must cross machines, people, or time.
+   Verify the capsule's body, Git head, and input digests before reuse. `capsule replay`
+   always requires a new literal argv; stored argv is context, never executable consent.
+3. Use `provenance create` to bind exact subjects and materials to an in-toto Statement
+   v1 with a SLSA provenance v1 predicate. Require an Ed25519 signature across a trust
+   boundary. A valid signature authenticates the statement bytes; it does not establish
+   correctness, a SLSA level, or requirement completion.
+4. Use `kernel compile` for pure content-addressed compiler graphs. Cache entries are
+   untrusted accelerators: verify key and output digest, recompute corruption, and
+   invalidate every downstream node whose upstream digest changed.
+5. Run `adapter inspect` and `adapter conform` before `adapter run`. Pin entrypoint
+   bytes, stage only declared inputs, strip ambient environment, invoke without a shell,
+   and bound time and output. `brokered` is not an OS sandbox. Use that term only for a
+   pinned WASI or container runtime that actually enforces filesystem and network limits.
+6. Use `history explain` to reconstruct the exact hash-chain revision and requirement
+   causality before resolving stale-agent, changed-scope, or "why was this believed"
+   questions. It is read-only and must reject a broken chain.
+7. Use `review compare` for independent structured reviews over the same input digest.
+   Preserve unique and minority findings, expose severity/recommendation/evidence
+   conflicts, and block on unresolved high severity. Reviewer count is not confidence;
+   consensus without evidence is an evidence gap.
+
+MCP exposes only read-only inspection, verification, explanation, and comparison.
+Mutation, replay, signing, adapter execution, and cache writes remain explicit CLI/CI
+operations. A capsule, cache hit, signature, mutation result, or review report may
+support a decision but never bypasses the mission's typed evidence and checkpoint rules.
+
+## 7. Slicing And Execution
 
 Order slices by user-visible critical path and dependency, not by file type. A useful
 slice crosses schema, API, UI, data population, permissions, and tests when that is
@@ -170,7 +253,7 @@ those events. Events created before this rule retain their original replay seman
 A migration or endpoint is an increment, not completion, unless the requirement itself
 was explicitly only that artifact.
 
-## 6. Multi-Worker Candidate Promotion
+## 8. Multi-Worker Candidate Promotion
 
 Use selective promotion when Claude, Codex, a human developer, or CI builds candidate
 work outside the canonical target branch. The coordinator owns the target mission,
@@ -210,7 +293,7 @@ acceptance. Promotion records reusable exact-content command evidence and expire
 context-bound evidence separately, reopens mapped target requirements, and requires new
 canonical proof before a checkpoint can restore a proven status.
 
-## 7. Proof Model
+## 9. Proof Model
 
 Use these statuses exactly:
 
@@ -245,7 +328,7 @@ Examples of insufficient proof:
 - Lambda was modified;
 - reviewer said `looks good`.
 
-## 8. Reviews And Defects
+## 10. Reviews And Defects
 
 Use appropriate reviewers as real gates. A review record includes reviewer, scope,
 finding, severity, disposition, requirement IDs, implementation change, and proof.
@@ -264,7 +347,7 @@ When a defect is found:
 Do not celebrate the number of tests or fixes. Explain what operator failure is now
 prevented.
 
-## 9. Deployment And Completion
+## 11. Deployment And Completion
 
 Before deployment, record canonical workflow, migrations, ordering constraints,
 rollback anchor, secrets/permissions, data population, and post-deploy journeys.
@@ -292,7 +375,7 @@ audit history.
 Mission completion requires the validator, full gates, production proof, completion
 map, and a clean handoff. Stop scheduled loops when complete.
 
-## 10. Failure Patterns
+## 12. Failure Patterns
 
 Reject these common shortcuts:
 

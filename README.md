@@ -19,7 +19,7 @@ Do not edit the Markdown projections. Mutating commands acquire a filesystem loc
 
 ## Agent control plane
 
-Tugboat 2.2 compiles the ledger into a small, content-addressed execution packet instead of making an agent reread the full mission. The packet names what is ready, blocked, or claimed; the exact acceptance and proof gaps; preservation duties; Git state; the next check; and a canonical SHA-256 digest.
+Tugboat 3.0 compiles the ledger into a small, content-addressed execution packet instead of making an agent reread the full mission. The packet names what is ready, blocked, or claimed; the exact acceptance and proof gaps; preservation duties; Git state; the next check; and a canonical SHA-256 digest.
 
 ```bash
 tugboat next --dir tugboat --json
@@ -56,12 +56,12 @@ The same control plane is available to Claude, Codex, IDEs, and other agent host
 }
 ```
 
-The MCP server is read-only by default and fixes the mission path at startup. Add `--allow-writes` to its startup arguments only when that host should be able to claim and release work. Tool arguments cannot change the mission path or elevate the policy. The server exposes deterministic `tugboat_language_recommend`, `tugboat_next`, and `tugboat_status` tools plus the current execution packet at `tugboat://mission/current`; write-enabled servers also expose `tugboat_claim` and `tugboat_release`.
+The MCP server is read-only by default and fixes the mission and repository paths at startup. Add `--allow-writes` to its startup arguments only when that host should be able to claim and release work. Tool arguments cannot change either path or elevate the policy. The server exposes deterministic mission intelligence, language recommendation, status, next-work, capsule/provenance verification, adapter inspection, history explanation, and differential-review tools plus the current execution packet at `tugboat://mission/current`; write-enabled servers also expose `tugboat_claim` and `tugboat_release`. Mutation, command replay, signing, adapter execution, cache writes, cross-mission memory, and federation remain explicit CLI/CI operations.
 MCP mutations require both `expectedRevision` and `expectedHead` from a fresh `tugboat_next` result, so the host fails closed if either mission history or Git context moved between reasoning and action.
 
 ## Language architecture compiler
 
-Tugboat 2.3 can compile ledger requirements, explicit constraints, team capability,
+Tugboat 3.0 can compile ledger requirements, explicit constraints, team capability,
 and Git-tracked repository facts into an auditable language recommendation:
 
 ```bash
@@ -112,9 +112,111 @@ work packets and mutations are causally bound to mission and Git state; proof is
 separate from generation; and signed candidate composition reopens affected proof.
 Claude, Codex, human shells, and CI all consume the same state machine.
 
-The next category-defining candidates are a proof-impact graph, an anti-slop linter, a
-counterfactual release simulator, capability-aware execution routing, and a cross-repo
-decision-memory graph. These are roadmap ideas, not shipped 2.3 behavior.
+Tugboat 3.0 ships ten content-addressed mission-intelligence compilers: proof impact,
+anti-slop quality, counterfactual release simulation, capability-aware execution
+routing, decision memory, proof-portfolio optimization, evidence freshness,
+trust-taint analysis, adversarial acceptance, and federated release trains. They share
+one dependency-free kernel, strict schemas and bounds, canonical SHA-256 reports, and a
+hard distinction between planning and proof.
+
+Tugboat 4.0 adds a proof runtime around those compilers: proof mutation, reproducible
+evidence capsules, signed in-toto/SLSA provenance, verified incremental recomputation,
+capability-brokered adapters, hash-chain time travel, and cross-agent differential
+review. These are not extra dashboards or agent personas. They test whether a gate can
+detect a declared defect, preserve the context needed to verify a result, and expose
+where independent reviewers or cached conclusions diverge.
+
+## Proof runtime
+
+Test the test, then capture and attest the exact result:
+
+```bash
+tugboat proof mutate --repo . --plan critical-mutations.json --json --gate -- npm test
+
+tugboat capsule capture --repo . --inputs package.json,scripts/tugboat.mjs \
+  --output proof.capsule.json -- npm test
+tugboat capsule verify --file proof.capsule.json --repo . --json
+
+tugboat provenance create --root . --subjects dist/report.json \
+  --materials materials.json --builder https://ci.example/builders/release \
+  --private-key release-ed25519.pem --output report.provenance.json
+tugboat provenance verify --file report.provenance.json --root . \
+  --public-key release-ed25519.pub --require-signature --json
+```
+
+Capsule replay always requires a new command after `--`; stored argv is never executed
+implicitly. A valid signature authenticates the exact statement bytes and signer. It
+does not prove correctness, establish a SLSA level, or satisfy a ledger row by itself.
+
+Compile only causally invalidated nodes and inspect extension boundaries:
+
+```bash
+tugboat kernel compile --graph causal-graph.json --cache .tugboat-cache --json
+tugboat adapter inspect --manifest adapters/reviewer/manifest.json --json
+tugboat adapter conform --manifest adapters/reviewer/manifest.json \
+  --cases adapters/reviewer/conformance.json --json
+tugboat history explain --dir tugboat --revision 12 --requirement R4 --json
+tugboat review compare --reviews codex-review.json,claude-review.json --json --gate
+```
+
+The causal cache is untrusted and revalidated. Adapter code is digest-pinned, receives
+only staged inputs and explicitly supplied environment names, runs without a shell,
+and is time/output bounded. `brokered` execution is intentionally not called an OS
+sandbox; kernel-enforced isolation requires a pinned WASI or container runtime.
+Differential review preserves minority findings and treats consensus without evidence
+as a gap—reviewer count is not confidence.
+
+## Mission intelligence
+
+Run contract quality before implementation, impact before choosing proof, and release
+intelligence before deployment:
+
+```bash
+tugboat intelligence lint --dir tugboat --profile quality.json --json --gate
+tugboat intelligence impact --dir tugboat --repo . \
+  --base origin/main --head HEAD --profile impact.json --json > impact-report.json
+tugboat intelligence portfolio --dir tugboat \
+  --impact impact-report.json --catalog proof-gates.json --json
+tugboat intelligence adversary --dir tugboat \
+  --profile adversarial.json --json --gate
+tugboat intelligence freshness --dir tugboat \
+  --policy freshness.json --observed-at 2026-10-28T18:00:00.000Z \
+  --impact impact-report.json --json --gate
+tugboat intelligence simulate --dir tugboat \
+  --profile release-controls.json --impact impact-report.json --json --gate
+```
+
+Trust analysis constrains routing before cost or latency can rank workers:
+
+```bash
+tugboat intelligence trust --graph trust-graph.json --policy trust-policy.json --json
+tugboat intelligence route --dir tugboat --workers workers.json \
+  --profile routing.json --observed-at 2026-10-28T18:00:00.000Z --json
+```
+
+Routing profiles must explicitly name `trustedIssuers`. A matching capability string
+is ineligible unless a listed third party issued a current evidence-digest attestation;
+when a trust report is supplied, every worker must also bind to a `type: worker` node.
+
+Cross-mission intelligence is deliberately explicit-file only:
+
+```bash
+tugboat intelligence memory --records decisions.json --context context.json \
+  --observed-at 2026-10-28T18:00:00.000Z --json
+tugboat intelligence federation --manifest release-train.json --json --gate
+```
+
+Impact reports must map every changed path or return `insufficient_evidence`.
+Portfolio output is an exact declared-cost set cover with
+`planStatus: not_executed`; adversarial cases are contracts; routing never dispatches;
+memory is precedent rather than authority; simulations are failure plans. None of these
+reports proves a requirement. Execute the selected work, capture typed evidence, and
+checkpoint normally.
+
+The reusable `templates/github/tugboat-intelligence.yml` workflow runs least-privilege
+pull-request gates and uploads content-addressed JSON reports without secret access.
+Its actions are commit-pinned, and manual dispatch requires an explicit comparison base
+instead of silently comparing a commit to itself.
 
 ## Install once, use everywhere
 

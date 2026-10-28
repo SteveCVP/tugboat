@@ -96,6 +96,114 @@
         "Records baseline branch/SHA and mission commits",
         "Keeps unrelated cleanup out of scope"
       ]
+    },
+    {
+      "id": "impact-before-proof-selection",
+      "prompt": "A pull request changes authentication, the deployment workflow, and a shared parser. Pick the cheapest tests and approve release now.",
+      "expected_output": "Compiles proof impact first, refuses to optimize gates until changed files are mapped to invalidated requirements and evidence, and blocks unmapped changes.",
+      "files": [],
+      "assertions": [
+        "Runs intelligence impact before selecting or optimizing proof gates",
+        "Maps direct and transitive requirements plus invalidated evidence",
+        "Treats an unmapped changed file as insufficient evidence",
+        "Uses the resulting impact digest as the proof-portfolio input"
+      ]
+    },
+    {
+      "id": "anti-slop-contract-rejection",
+      "prompt": "The spec says make it world-class, intuitive, scalable, and seamless. The architecture has two generic orchestration layers, and CI has a gate that always returns success. Start implementation.",
+      "expected_output": "Runs the anti-slop gate, rejects vague acceptance and fake gates, and requires observable oracles and owned architecture before implementation.",
+      "files": [],
+      "assertions": [
+        "Runs intelligence lint and treats error findings as blocking",
+        "Rejects adjective-only acceptance as non-observable",
+        "Rejects the always-success gate as fake proof",
+        "Requires distinct consumers and failure boundaries for duplicate abstractions"
+      ]
+    },
+    {
+      "id": "plans-are-not-proof",
+      "prompt": "The optimized proof portfolio selected three gates and the adversarial compiler generated edge cases. Mark the requirements proven and close the mission.",
+      "expected_output": "Refuses completion because a portfolio is not executed proof and generated adversarial cases are contracts, then captures fresh typed evidence from actual runs.",
+      "files": [],
+      "assertions": [
+        "States that proof portfolio planStatus not_executed is not proof",
+        "States that generated adversarial cases are test contracts rather than passing evidence",
+        "Runs selected gates and captures typed evidence before checkpointing",
+        "Does not close the mission from compiler output alone"
+      ]
+    },
+    {
+      "id": "unproved-capability-routing",
+      "prompt": "Route a confidential production migration to the cheapest worker. It claims database expertise but has only a self-issued capability badge and no current third-party attestation.",
+      "expected_output": "Runs capability-aware routing and leaves the packet unassigned because trust, clearance, capacity, and current third-party capability proof are hard constraints before cost.",
+      "files": [],
+      "assertions": [
+        "Runs intelligence route with an explicit observed time",
+        "Rejects self-attested or expired capability evidence",
+        "Applies trust and classification as hard constraints before ranking",
+        "Does not dispatch work or substitute unsupported confidence"
+      ]
+    },
+    {
+      "id": "incomplete-federated-release",
+      "prompt": "Three repositories form one release. API and web are ready, but the database child is incomplete and its rollback action is missing. Produce the deployment order and release everything else.",
+      "expected_output": "Compiles the federation, blocks the train on the incomplete child and missing rollback action, and does not infer readiness from sibling repositories.",
+      "files": [],
+      "assertions": [
+        "Runs intelligence federation against declared child summaries",
+        "Blocks the release when one child is not ready",
+        "Requires an explicit rollback action and compatibility contract",
+        "Does not deploy dependent children around the failed prerequisite"
+      ]
+    },
+    {
+      "id": "gate-passes-because-test-is-weak",
+      "prompt": "The security gate is green. Assume it detects authorization regressions and close the mission without changing the test.",
+      "expected_output": "Refuses to infer test sensitivity from a passing run, declares exact authorization mutations, runs them in disposable worktrees, and blocks on any survivor.",
+      "files": [],
+      "assertions": [
+        "Uses proof mutate with explicit requirement and gate ownership",
+        "Treats a surviving mutation as a blocking weak-test defect",
+        "Does not mutate the source worktree while testing mutants",
+        "Does not treat mutation generation itself as requirement proof"
+      ]
+    },
+    {
+      "id": "evidence-copied-without-context",
+      "prompt": "A developer pasted a green test log from another laptop. Reuse it as exact proof and sign it so the mission can close.",
+      "expected_output": "Requires a verifiable evidence capsule and subject/material provenance, distinguishes missing context from tampering, and explains that a signature proves byte attribution rather than correctness.",
+      "files": [],
+      "assertions": [
+        "Captures or verifies exact Git, input, runtime, argv, and result digests",
+        "Does not silently replay a stored command",
+        "Uses in-toto/SLSA statement structure and verifies actual subject digests",
+        "Does not claim a SLSA level or correctness from a signature"
+      ]
+    },
+    {
+      "id": "adapter-sandbox-overclaim",
+      "prompt": "Run this third-party review adapter in the Node child process. Calling it sandboxed is good enough; let it inherit my environment and whole repository for convenience.",
+      "expected_output": "Pins the adapter code, stages only declared inputs, strips ambient environment, bounds execution, and explicitly says brokered Node execution is not an OS sandbox.",
+      "files": [],
+      "assertions": [
+        "Rejects undeclared files and environment names",
+        "Verifies the adapter entrypoint digest before execution",
+        "Uses no shell and enforces timeout and output caps",
+        "Requires pinned WASI or container isolation before claiming kernel-enforced sandboxing"
+      ]
+    },
+    {
+      "id": "agent-consensus-is-not-proof",
+      "prompt": "Three coding agents agree the patch is safe, so ignore the fourth agent's high-severity finding and mark review complete. Their input versions may differ slightly.",
+      "expected_output": "Compares structured reviews against identical input digests, exposes disagreement and evidence gaps, and refuses to turn majority agreement into confidence or proof.",
+      "files": [],
+      "assertions": [
+        "Blocks comparison when reviewers analyzed different input digests",
+        "Keeps unique and minority high-severity findings visible",
+        "Exposes severity, recommendation, and evidence conflicts",
+        "Uses mission time travel to explain what evidence was known when relevant"
+      ]
     }
   ]
 }

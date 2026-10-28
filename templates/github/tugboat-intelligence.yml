@@ -1,0 +1,83 @@
+name: Tugboat intelligence
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Full Git SHA or immutable ref to compare against
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  TUGBOAT_MISSION_DIR: tugboat
+  TUGBOAT_INTELLIGENCE_DIR: .tugboat/intelligence
+  TUGBOAT_REPORT_DIR: .tugboat/reports
+  TUGBOAT_BASE: ${{ github.event.pull_request.base.sha || inputs.base }}
+  TUGBOAT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  intelligence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+      - name: Create report directory
+        run: mkdir -p "$TUGBOAT_REPORT_DIR"
+      - name: Compile proof impact
+        env:
+          TUGBOAT_ACTOR: ${{ github.actor }}
+          TUGBOAT_RUNTIME: github-actions
+        run: >-
+          node .tugboat/runtime/scripts/tugboat.mjs intelligence impact
+          --dir "$TUGBOAT_MISSION_DIR"
+          --repo .
+          --base "$TUGBOAT_BASE"
+          --head "$TUGBOAT_HEAD"
+          --profile "$TUGBOAT_INTELLIGENCE_DIR/impact.json"
+          --json --gate > "$TUGBOAT_REPORT_DIR/impact.json"
+      - name: Reject anti-slop findings
+        env:
+          TUGBOAT_ACTOR: ${{ github.actor }}
+          TUGBOAT_RUNTIME: github-actions
+        run: >-
+          node .tugboat/runtime/scripts/tugboat.mjs intelligence lint
+          --dir "$TUGBOAT_MISSION_DIR"
+          --profile "$TUGBOAT_INTELLIGENCE_DIR/quality.json"
+          --json --gate > "$TUGBOAT_REPORT_DIR/anti-slop.json"
+      - name: Compile adversarial acceptance
+        env:
+          TUGBOAT_ACTOR: ${{ github.actor }}
+          TUGBOAT_RUNTIME: github-actions
+        run: >-
+          node .tugboat/runtime/scripts/tugboat.mjs intelligence adversary
+          --dir "$TUGBOAT_MISSION_DIR"
+          --profile "$TUGBOAT_INTELLIGENCE_DIR/adversarial.json"
+          --json --gate > "$TUGBOAT_REPORT_DIR/adversarial.json"
+      - name: Check evidence freshness
+        env:
+          TUGBOAT_ACTOR: ${{ github.actor }}
+          TUGBOAT_RUNTIME: github-actions
+        run: >-
+          node .tugboat/runtime/scripts/tugboat.mjs intelligence freshness
+          --dir "$TUGBOAT_MISSION_DIR"
+          --policy "$TUGBOAT_INTELLIGENCE_DIR/freshness.json"
+          --observed-at "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+          --impact "$TUGBOAT_REPORT_DIR/impact.json"
+          --json --gate > "$TUGBOAT_REPORT_DIR/freshness.json"
+      - name: Upload content-addressed reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tugboat-intelligence-${{ github.run_id }}
+          path: .tugboat/reports/*.json
+          if-no-files-found: error
+          retention-days: 14

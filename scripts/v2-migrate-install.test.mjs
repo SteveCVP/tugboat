@@ -51,6 +51,17 @@ function proveCopiedControlPlane(runtimeRoot) {
   assert.equal(sourceDecision.status, 0, sourceDecision.stderr);
   assert.equal(copiedDecision.status, 0, copiedDecision.stderr);
   assert.equal(JSON.parse(copiedDecision.stdout).digest, JSON.parse(sourceDecision.stdout).digest);
+  fs.writeFileSync(path.join(project, "spec.md"), "# Mission\n\nBuild everything and compile impact.\n");
+  execFileSync("git", ["add", "spec.md"], { cwd: project });
+  execFileSync("git", ["commit", "-m", "change tracked input"], { cwd: project });
+  const impactProfile = path.join(project, "impact-profile.json");
+  fs.writeFileSync(impactProfile, JSON.stringify({ rules: [{ id: "spec", pattern: "spec.md", requirementIds: ["R1"], evidenceIds: [], tests: ["node --test"], risks: ["contract"] }] }));
+  const impactArgs = ["intelligence", "impact", "--dir", missionDir, "--repo", project, "--base", JSON.parse(next.stdout).observation.git.head, "--head", "HEAD", "--profile", impactProfile, "--json"];
+  const sourceImpact = spawnSync(process.execPath, [CLI, ...impactArgs], { cwd: project, encoding: "utf8" });
+  const copiedImpact = spawnSync(process.execPath, [runtimeCli, ...impactArgs], { cwd: project, encoding: "utf8" });
+  assert.equal(sourceImpact.status, 0, sourceImpact.stderr);
+  assert.equal(copiedImpact.status, 0, copiedImpact.stderr);
+  assert.equal(JSON.parse(copiedImpact.stdout).digest, JSON.parse(sourceImpact.stdout).digest);
   const handshake = spawnSync(process.execPath, [runtimeMcp, "--dir", missionDir], {
     cwd: project,
     input: `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "installed-test", version: "1" } } })}\n`,
@@ -90,13 +101,15 @@ test("installer puts the same versioned payload in shared, Claude, and Codex ski
   const result = installTugboat({ sourceDir: ROOT, home, targets: ["agents", "claude", "codex"] });
   assert.equal(result.installed.length, 3);
   const manifests = result.installed.map((dir) => JSON.parse(fs.readFileSync(path.join(dir, ".tugboat-install.json"), "utf8")));
-  assert.deepEqual(new Set(manifests.map((item) => item.version)), new Set(["2.3.0"]));
+  assert.deepEqual(new Set(manifests.map((item) => item.version)), new Set(["4.0.0"]));
   assert.equal(new Set(manifests.map((item) => item.payloadDigest)).size, 1);
   for (const dir of result.installed) {
     assert.ok(fs.existsSync(path.join(dir, "SKILL.md")));
     assert.ok(fs.existsSync(path.join(dir, "scripts", "tugboat.mjs")));
     assert.ok(fs.existsSync(path.join(dir, "scripts", "tugboat-mcp.mjs")));
     assert.ok(fs.existsSync(path.join(dir, "scripts", "lib", "language-optimizer.mjs")));
+    assert.ok(fs.existsSync(path.join(dir, "scripts", "lib", "causality-intelligence.mjs")));
+    assert.ok(fs.existsSync(path.join(dir, "scripts", "lib", "federation.mjs")));
   }
   proveCopiedControlPlane(result.installed[0]);
 });

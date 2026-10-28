@@ -7,21 +7,36 @@ import path from "node:path";
 import process from "node:process";
 
 import { sha256 } from "./lib/canonical.mjs";
+import { conformAdapter, inspectAdapter, runAdapter } from "./lib/adapter-sdk.mjs";
 import { compareBundles, createBundle, inspectBundle, readBundle } from "./lib/bundle.mjs";
+import { compileCausalGraph } from "./lib/causal-kernel.mjs";
+import { compileImpactGraph, inspectTrackedChanges } from "./lib/causality-intelligence.mjs";
 import { claimRequirements, compileExecutionPacket, releaseClaim } from "./lib/control-plane.mjs";
 import { assertContinuity, inspectContinuity, reconcileMission } from "./lib/continuity.mjs";
+import { compileDecisionMemory } from "./lib/decision-memory.mjs";
 import { verifyDeploymentEvidence } from "./lib/deployment.mjs";
+import { compileDifferentialReview } from "./lib/differential-review.mjs";
+import { captureEvidenceCapsule, replayEvidenceCapsule, verifyEvidenceCapsule } from "./lib/evidence-capsule.mjs";
 import { isMainModule } from "./lib/entrypoint.mjs";
 import { captureCommandEvidence, captureObservationEvidence, checkpointMission, gitSnapshot, recordEvidence } from "./lib/evidence.mjs";
+import { compileFederation } from "./lib/federation.mjs";
+import { explainMissionHistory } from "./lib/history-debugger.mjs";
+import { readMissionState } from "./lib/intelligence-core.mjs";
 import { compileLanguageRecommendation, MAX_PROFILE_BYTES } from "./lib/language-optimizer.mjs";
 import { closeMission, MissionValidationError, validateMission } from "./lib/mission-validator.mjs";
 import { migrateLegacyMission } from "./lib/migrate.mjs";
+import { compileEvidenceFreshness, compileProofPortfolio, compileReleaseSimulation } from "./lib/proof-intelligence.mjs";
+import { runProofMutations } from "./lib/proof-mutation.mjs";
 import { promoteBundle } from "./lib/promotion.mjs";
+import { createProofProvenance, verifyProofProvenance } from "./lib/provenance.mjs";
+import { compileAdversarialAcceptance, compileAntiSlopReport } from "./lib/quality-intelligence.mjs";
 import { backupMission, rebuildMission } from "./lib/recovery.mjs";
 import { activeRequirementIds, createMission, missionReducer } from "./lib/reducer.mjs";
 import { renderMission } from "./lib/render.mjs";
+import { compileExecutionRouting } from "./lib/routing-intelligence.mjs";
 import { resolveActor } from "./lib/security.mjs";
 import { appendEvent, readState, replayEvents } from "./lib/store.mjs";
+import { compileTrustGraph } from "./lib/trust-intelligence.mjs";
 import { computeSourceDigest, validateLedger } from "./validate-ledger.mjs";
 
 const REQUIREMENT_COLUMNS = [
@@ -40,7 +55,7 @@ function die(message) {
 function parseArgs(argv) {
   const [rawCommand, ...rest] = argv;
   const command = rawCommand === "--help" ? undefined : rawCommand;
-  const subcommand = ["bundle", "language"].includes(command) && rest[0] && !rest[0].startsWith("--") ? rest.shift() : undefined;
+  const subcommand = ["adapter", "bundle", "capsule", "history", "intelligence", "kernel", "language", "proof", "provenance", "review"].includes(command) && rest[0] && !rest[0].startsWith("--") ? rest.shift() : undefined;
   const values = new Map();
   const flags = new Set(rawCommand === "--help" ? ["help"] : []);
   for (let index = 0; index < rest.length; index += 1) {
@@ -624,6 +639,298 @@ function handleLanguageRecommend(args) {
   console.log(`Decision: ${report.digest}`);
 }
 
+const MAX_INTELLIGENCE_INPUT_BYTES = 1024 * 1024;
+const INTELLIGENCE_OPERATIONS = new Set([
+  "adversary",
+  "federation",
+  "freshness",
+  "impact",
+  "lint",
+  "memory",
+  "portfolio",
+  "route",
+  "simulate",
+  "trust",
+]);
+
+function intelligenceJsonFile(args, name, { optional = false, profile = false } = {}) {
+  const input = args.values.get(name);
+  if (!input) {
+    if (optional) return undefined;
+    die(`Missing --${name}`);
+  }
+  const file = path.resolve(input);
+  let size;
+  try {
+    size = fs.statSync(file).size;
+  } catch {
+    die(`Cannot read --${name} JSON file`);
+  }
+  const limit = profile ? MAX_PROFILE_BYTES : MAX_INTELLIGENCE_INPUT_BYTES;
+  if (size > limit) die(`${name} exceeds ${profile ? "64 KiB" : "1 MiB"}`);
+  let source;
+  try {
+    source = fs.readFileSync(file, "utf8");
+  } catch {
+    die(`Cannot read --${name} JSON file`);
+  }
+  if (Buffer.byteLength(source) > limit) die(`${name} exceeds ${profile ? "64 KiB" : "1 MiB"}`);
+  try {
+    return JSON.parse(source);
+  } catch {
+    die(`Invalid JSON in --${name}`);
+  }
+}
+
+function intelligenceState(args) {
+  return readMissionState(v2MissionDir(args));
+}
+
+function compileIntelligence(args) {
+  const operation = args.subcommand;
+  if (!INTELLIGENCE_OPERATIONS.has(operation)) die(`Unknown intelligence operation: ${operation ?? "none"}`);
+  if (operation === "impact") {
+    const state = intelligenceState(args);
+    const repo = path.resolve(args.values.get("repo") ?? state.metadata.worktree);
+    const base = args.values.get("base") ?? state.metadata.baselineGitSha;
+    const head = args.values.get("head") ?? "HEAD";
+    const profile = intelligenceJsonFile(args, "profile", { profile: true });
+    return compileImpactGraph(state, inspectTrackedChanges(repo, base, head).changes, profile);
+  }
+  if (operation === "lint") {
+    return compileAntiSlopReport(intelligenceState(args), intelligenceJsonFile(args, "profile", { optional: true, profile: true }) ?? {});
+  }
+  if (operation === "simulate") {
+    return compileReleaseSimulation(
+      intelligenceState(args),
+      intelligenceJsonFile(args, "profile", { optional: true, profile: true }) ?? {},
+      intelligenceJsonFile(args, "impact", { optional: true }),
+      intelligenceJsonFile(args, "adversarial", { optional: true }),
+    );
+  }
+  if (operation === "route") {
+    return compileExecutionRouting(
+      intelligenceState(args),
+      intelligenceJsonFile(args, "workers"),
+      intelligenceJsonFile(args, "profile", { profile: true }),
+      required(args, "observed-at"),
+      intelligenceJsonFile(args, "trust", { optional: true }),
+    );
+  }
+  if (operation === "memory") {
+    return compileDecisionMemory(
+      intelligenceJsonFile(args, "records"),
+      intelligenceJsonFile(args, "context"),
+      required(args, "observed-at"),
+    );
+  }
+  if (operation === "portfolio") {
+    return compileProofPortfolio(
+      intelligenceState(args),
+      intelligenceJsonFile(args, "impact"),
+      intelligenceJsonFile(args, "catalog"),
+    );
+  }
+  if (operation === "freshness") {
+    return compileEvidenceFreshness(
+      intelligenceState(args),
+      intelligenceJsonFile(args, "policy"),
+      required(args, "observed-at"),
+      intelligenceJsonFile(args, "impact", { optional: true }),
+    );
+  }
+  if (operation === "trust") {
+    return compileTrustGraph(intelligenceJsonFile(args, "graph"), intelligenceJsonFile(args, "policy"));
+  }
+  if (operation === "adversary") {
+    return compileAdversarialAcceptance(intelligenceState(args), intelligenceJsonFile(args, "profile", { optional: true, profile: true }) ?? {});
+  }
+  return compileFederation(intelligenceJsonFile(args, "manifest"));
+}
+
+function intelligenceGaps(report) {
+  const candidates = [
+    ...(report.gaps ?? []),
+    ...(report.findings ?? []).filter(({ severity }) => severity === "error"),
+    ...(report.unassigned ?? []),
+    ...(report.violations ?? []),
+    ...(report.uncoveredObligations ?? []),
+    ...(report.oracleGaps ?? []),
+    ...(report.journeys ?? []).filter(({ verdict }) => verdict === "blocked"),
+  ];
+  return candidates.slice(0, 3).map((item) => {
+    if (typeof item === "string") return item;
+    return item.message ?? item.code ?? item.ruleId ?? item.requirementId ?? item.id ?? JSON.stringify(item);
+  });
+}
+
+function handleIntelligence(args) {
+  const report = compileIntelligence(args);
+  if (args.flags.has("json")) console.log(JSON.stringify(report, null, 2));
+  else {
+    console.log(`${args.subcommand}: ${report.status}`);
+    for (const gap of intelligenceGaps(report)) console.log(`Gap: ${gap}`);
+    console.log(`Digest: ${report.digest}`);
+  }
+  if (args.flags.has("gate") && report.status !== "ready") process.exitCode = 2;
+}
+
+function jsonFileArgument(args, name, { optional = false } = {}) {
+  return intelligenceJsonFile(args, name, { optional });
+}
+
+function boundedTextFile(file, label, limit = MAX_INTELLIGENCE_INPUT_BYTES) {
+  const resolved = path.resolve(file);
+  let stat;
+  try { stat = fs.statSync(resolved); } catch { die(`Cannot read ${label}`); }
+  if (!stat.isFile() || stat.size > limit) die(`${label} exceeds ${limit} bytes or is not a file`);
+  const value = fs.readFileSync(resolved, "utf8");
+  if (Buffer.byteLength(value) > limit) die(`${label} exceeds ${limit} bytes`);
+  return value;
+}
+
+function boundedJsonPath(file, label) {
+  try { return JSON.parse(boundedTextFile(file, label)); } catch (error) {
+    if (error.exitCode) throw error;
+    die(`Invalid JSON in ${label}`);
+  }
+}
+
+function csvArgument(args, name, { optional = false } = {}) {
+  const value = args.values.get(name);
+  if (!value) {
+    if (optional) return [];
+    die(`Missing --${name}`);
+  }
+  const values = value.split(",").map((item) => item.trim()).filter(Boolean);
+  if (!values.length || values.length > 256 || new Set(values).size !== values.length) die(`--${name} must contain 1 to 256 unique comma-separated values`);
+  return values;
+}
+
+function writeJsonArtifact(args, report) {
+  const output = args.values.get("output");
+  if (output) {
+    const file = path.resolve(output);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const temporary = `${file}.tmp-${process.pid}`;
+    fs.writeFileSync(temporary, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+    fs.renameSync(temporary, file);
+  }
+  if (args.flags.has("json") || !output) console.log(JSON.stringify(report, null, 2));
+  else console.log(`Wrote ${report.schemaVersion ?? "artifact"}: ${output}`);
+}
+
+function handleProof(args) {
+  if (args.subcommand !== "mutate") die(`Unknown proof subcommand: ${args.subcommand ?? "none"}`);
+  const command = args.values.get("_command");
+  if (!Array.isArray(command) || !command.length) die("Proof mutation needs `-- <command> [args]`");
+  const report = runProofMutations({ repoDir: path.resolve(required(args, "repo")), plan: jsonFileArgument(args, "plan"), command });
+  writeJsonArtifact(args, report);
+  if (args.flags.has("gate") && report.status !== "ready") process.exitCode = 2;
+}
+
+function handleCapsule(args) {
+  if (args.subcommand === "capture") {
+    const command = args.values.get("_command");
+    if (!Array.isArray(command) || !command.length) die("Capsule capture needs `-- <command> [args]`");
+    writeJsonArtifact(args, captureEvidenceCapsule({
+      repoDir: path.resolve(required(args, "repo")),
+      inputPaths: csvArgument(args, "inputs"),
+      artifactPaths: csvArgument(args, "artifacts", { optional: true }),
+      command,
+      capturedAt: args.values.get("captured-at") ?? new Date().toISOString(),
+    }));
+    return;
+  }
+  const capsule = jsonFileArgument(args, "file");
+  if (args.subcommand === "verify") {
+    writeJsonArtifact(args, verifyEvidenceCapsule(capsule, { repoDir: args.values.has("repo") ? path.resolve(args.values.get("repo")) : undefined }));
+    return;
+  }
+  if (args.subcommand === "replay") {
+    const command = args.values.get("_command");
+    if (!Array.isArray(command) || !command.length) die("Capsule replay needs `-- <command> [args]`");
+    writeJsonArtifact(args, replayEvidenceCapsule(capsule, { repoDir: path.resolve(required(args, "repo")), command }));
+    return;
+  }
+  die(`Unknown capsule subcommand: ${args.subcommand ?? "none"}`);
+}
+
+function handleProvenance(args) {
+  if (args.subcommand === "create") {
+    const rootDir = path.resolve(args.values.get("root") ?? process.cwd());
+    const keyFile = args.values.get("private-key");
+    writeJsonArtifact(args, createProofProvenance({
+      rootDir,
+      subjects: csvArgument(args, "subjects"),
+      materials: jsonFileArgument(args, "materials", { optional: true }) ?? [],
+      builderId: required(args, "builder"),
+      invocation: jsonFileArgument(args, "invocation", { optional: true }) ?? {},
+      privateKey: keyFile ? boundedTextFile(keyFile, "private key", 64 * 1024) : undefined,
+    }));
+    return;
+  }
+  if (args.subcommand === "verify") {
+    const publicKeyFile = args.values.get("public-key");
+    writeJsonArtifact(args, verifyProofProvenance(jsonFileArgument(args, "file"), {
+      rootDir: args.values.has("root") ? path.resolve(args.values.get("root")) : undefined,
+      publicKey: publicKeyFile ? boundedTextFile(publicKeyFile, "public key", 64 * 1024) : undefined,
+      requireSignature: args.flags.has("require-signature"),
+    }));
+    return;
+  }
+  die(`Unknown provenance subcommand: ${args.subcommand ?? "none"}`);
+}
+
+function handleKernel(args) {
+  if (args.subcommand !== "compile") die(`Unknown kernel subcommand: ${args.subcommand ?? "none"}`);
+  writeJsonArtifact(args, compileCausalGraph(jsonFileArgument(args, "graph"), { cacheDir: path.resolve(required(args, "cache")) }));
+}
+
+function adapterOptions(args) {
+  const manifestFile = path.resolve(required(args, "manifest"));
+  return { manifest: jsonFileArgument(args, "manifest"), manifestDir: path.dirname(manifestFile) };
+}
+
+function handleAdapter(args) {
+  const options = adapterOptions(args);
+  if (args.subcommand === "inspect") {
+    writeJsonArtifact(args, inspectAdapter(options.manifest, { manifestDir: options.manifestDir }));
+    return;
+  }
+  const runOptions = {
+    ...options,
+    inputRoot: path.resolve(args.values.get("input-root") ?? options.manifestDir),
+    inputPaths: csvArgument(args, "inputs", { optional: true }),
+    environment: jsonFileArgument(args, "environment", { optional: true }) ?? {},
+  };
+  if (args.subcommand === "run") {
+    writeJsonArtifact(args, runAdapter({ ...runOptions, input: jsonFileArgument(args, "input") }));
+    return;
+  }
+  if (args.subcommand === "conform") {
+    writeJsonArtifact(args, conformAdapter(runOptions, jsonFileArgument(args, "cases")));
+    return;
+  }
+  die(`Unknown adapter subcommand: ${args.subcommand ?? "none"}`);
+}
+
+function handleHistory(args) {
+  if (args.subcommand !== "explain") die(`Unknown history subcommand: ${args.subcommand ?? "none"}`);
+  writeJsonArtifact(args, explainMissionHistory(v2MissionDir(args), {
+    revision: args.values.has("revision") ? Number(args.values.get("revision")) : undefined,
+    requirementId: args.values.get("requirement"),
+  }));
+}
+
+function handleReview(args) {
+  if (args.subcommand !== "compare") die(`Unknown review subcommand: ${args.subcommand ?? "none"}`);
+  const reviews = csvArgument(args, "reviews").map((file, index) => boundedJsonPath(file, `review[${index}]`));
+  const report = compileDifferentialReview(reviews);
+  writeJsonArtifact(args, report);
+  if (args.flags.has("gate") && report.status !== "ready") process.exitCode = 2;
+}
+
 function publicClaim(claim) {
   return {
     id: claim.id,
@@ -1038,13 +1345,17 @@ function handleClose(args) {
 }
 
 function usage() {
-  return `Usage:\n  tugboat init --dir DIR --mission ID --title TITLE --owner NAME --source FILE --requirements-file FILE --target local|production --critical-path IDs --deploy-path PATH [--legacy]\n  tugboat status --dir DIR [--json]\n  tugboat next --dir DIR [--observed-at ISO] [--json]\n  tugboat claim --dir DIR --id ID --holder NAME --requirements IDs [--ttl-seconds 900] [--expected-revision N] [--expected-head SHA] [--json]\n  tugboat release --dir DIR --claim ID --holder NAME [--expected-revision N] [--expected-head SHA] [--json]\n  tugboat amend --dir DIR --id ID --requirements IDs --reason TEXT [--supersedes IDs] [--replacement-file FILE]\n  tugboat evidence --dir DIR --id ID --requirements IDs -- <command> [args]\n  tugboat evidence --dir DIR --kind operator|browser --id ID --requirements IDs --url URL --result TEXT [--viewport TEXT]\n  tugboat deployment --dir DIR --id ID --provider github-actions|aws-cloudformation --external-id ID --environment ENV --requirements IDs\n  tugboat checkpoint --dir DIR --requirements IDs --status STATUS --evidence-ids IDs --action TEXT --next TEXT\n  tugboat reconcile --dir DIR --issues CODES --reason TEXT [--allow-current-patch] [--accept-source-drift]\n  tugboat validate --dir DIR [--base REF] [--release] [--json]\n  tugboat ci --dir DIR [--base REF] [--json]\n  tugboat resume --dir DIR [--json]\n  tugboat close --dir DIR [--base REF]\n  tugboat language recommend --dir MISSION [--repo REPOSITORY] [--profile FILE] [--json]\n  tugboat bundle create --dir SOURCE_MISSION --id ID --output FILE --requirements IDS [--commits SHAS] [--components-file FILE] [--commit-requirements-file FILE] [--depends-on IDS] [--private-key FILE]\n  tugboat bundle inspect --file FILE [--public-key FILE] [--require-signature] [--json]\n  tugboat bundle compare --bundles FILES [--public-key FILE] [--require-signature] [--json]\n  tugboat cherry-pick --dir TARGET_MISSION --bundle FILE --requirements IDS [--exclude IDS] [--map SOURCE:TARGET] [--public-key FILE] [--require-signature] [--dry-run] -- COMMAND [ARGS]\n  tugboat migrate --legacy-dir DIR --dir NEW_DIR\n  tugboat backup --dir DIR [--destination DIR]\n  tugboat rebuild --dir DIR`;
+  return `Usage:\n  tugboat init --dir DIR --mission ID --title TITLE --owner NAME --source FILE --requirements-file FILE --target local|production --critical-path IDs --deploy-path PATH [--legacy]\n  tugboat status --dir DIR [--json]\n  tugboat next --dir DIR [--observed-at ISO] [--json]\n  tugboat claim --dir DIR --id ID --holder NAME --requirements IDs [--ttl-seconds 900] [--expected-revision N] [--expected-head SHA] [--json]\n  tugboat release --dir DIR --claim ID --holder NAME [--expected-revision N] [--expected-head SHA] [--json]\n  tugboat amend --dir DIR --id ID --requirements IDs --reason TEXT [--supersedes IDs] [--replacement-file FILE]\n  tugboat evidence --dir DIR --id ID --requirements IDs -- <command> [args]\n  tugboat evidence --dir DIR --kind operator|browser --id ID --requirements IDs --url URL --result TEXT [--viewport TEXT]\n  tugboat deployment --dir DIR --id ID --provider github-actions|aws-cloudformation --external-id ID --environment ENV --requirements IDs\n  tugboat checkpoint --dir DIR --requirements IDs --status STATUS --evidence-ids IDs --action TEXT --next TEXT\n  tugboat reconcile --dir DIR --issues CODES --reason TEXT [--allow-current-patch] [--accept-source-drift]\n  tugboat validate --dir DIR [--base REF] [--release] [--json]\n  tugboat ci --dir DIR [--base REF] [--json]\n  tugboat resume --dir DIR [--json]\n  tugboat close --dir DIR [--base REF]\n  tugboat language recommend --dir MISSION [--repo REPOSITORY] [--profile FILE] [--json]\n  tugboat bundle create --dir SOURCE_MISSION --id ID --output FILE --requirements IDS [--commits SHAS] [--components-file FILE] [--commit-requirements-file FILE] [--depends-on IDS] [--private-key FILE]\n  tugboat bundle inspect --file FILE [--public-key FILE] [--require-signature] [--json]\n  tugboat bundle compare --bundles FILES [--public-key FILE] [--require-signature] [--json]\n  tugboat cherry-pick --dir TARGET_MISSION --bundle FILE --requirements IDS [--exclude IDS] [--map SOURCE:TARGET] [--public-key FILE] [--require-signature] [--dry-run] -- COMMAND [ARGS]\n  tugboat migrate --legacy-dir DIR --dir NEW_DIR\n  tugboat backup --dir DIR [--destination DIR]\n  tugboat rebuild --dir DIR\n  tugboat proof mutate --repo REPO --plan FILE [--output FILE] [--json] [--gate] -- COMMAND [ARGS]\n  tugboat capsule capture --repo REPO --inputs PATHS [--artifacts PATHS] [--captured-at ISO] [--output FILE] -- COMMAND [ARGS]\n  tugboat capsule verify --file FILE [--repo REPO] [--output FILE] [--json]\n  tugboat capsule replay --file FILE --repo REPO [--output FILE] -- COMMAND [ARGS]\n  tugboat provenance create --root DIR --subjects PATHS [--materials FILE] --builder ID [--invocation FILE] [--private-key FILE] [--output FILE]\n  tugboat provenance verify --file FILE [--root DIR] [--public-key FILE] [--require-signature] [--json]\n  tugboat kernel compile --graph FILE --cache DIR [--output FILE] [--json]\n  tugboat adapter inspect --manifest FILE [--json]\n  tugboat adapter run --manifest FILE --input FILE [--inputs PATHS] [--input-root DIR] [--environment FILE] [--output FILE]\n  tugboat adapter conform --manifest FILE --cases FILE [--inputs PATHS] [--input-root DIR] [--environment FILE] [--output FILE]\n  tugboat history explain --dir MISSION [--revision N] [--requirement ID] [--json]\n  tugboat review compare --reviews FILES [--json] [--gate]`;
+}
+
+function intelligenceUsage() {
+  return `Intelligence:\n  tugboat intelligence impact --dir MISSION --profile FILE [--repo REPOSITORY] [--base REF] [--head REF] [--json] [--gate]\n  tugboat intelligence lint|simulate|adversary --dir MISSION [--profile FILE] [--json] [--gate]\n  tugboat intelligence route --dir MISSION --workers FILE --profile FILE --observed-at ISO [--trust FILE] [--json] [--gate]\n  tugboat intelligence memory --records FILE --context FILE --observed-at ISO [--json] [--gate]\n  tugboat intelligence portfolio --dir MISSION --impact FILE --catalog FILE [--json] [--gate]\n  tugboat intelligence freshness --dir MISSION --policy FILE --observed-at ISO [--impact FILE] [--json] [--gate]\n  tugboat intelligence trust --graph FILE --policy FILE [--json] [--gate]\n  tugboat intelligence federation --manifest FILE [--json] [--gate]`;
 }
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.command || args.flags.has("help")) {
-    console.log(usage());
+    console.log(`${usage()}\n${intelligenceUsage()}`);
     return;
   }
   if (args.command === "init" && (args.flags.has("legacy") || args.values.get("protocol") === "1.1")) handleInit(args);
@@ -1071,6 +1382,14 @@ function main() {
   else if (args.command === "rebuild") handleRebuild(args);
   else if (args.command === "language" && args.subcommand === "recommend") handleLanguageRecommend(args);
   else if (args.command === "language") die(`Unknown language subcommand: ${args.subcommand ?? "none"}\n${usage()}`);
+  else if (args.command === "intelligence") handleIntelligence(args);
+  else if (args.command === "proof") handleProof(args);
+  else if (args.command === "capsule") handleCapsule(args);
+  else if (args.command === "provenance") handleProvenance(args);
+  else if (args.command === "kernel") handleKernel(args);
+  else if (args.command === "adapter") handleAdapter(args);
+  else if (args.command === "history") handleHistory(args);
+  else if (args.command === "review") handleReview(args);
   else if (args.command === "bundle" && args.subcommand === "create") handleBundleCreate(args);
   else if (args.command === "bundle" && args.subcommand === "inspect") handleBundleInspect(args);
   else if (args.command === "bundle" && args.subcommand === "compare") handleBundleCompare(args);

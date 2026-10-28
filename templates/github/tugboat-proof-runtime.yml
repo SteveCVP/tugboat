@@ -1,0 +1,59 @@
+name: Tugboat proof runtime
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TUGBOAT_RUNTIME_DIR: .tugboat/runtime
+  TUGBOAT_PROOF_DIR: /tmp/tugboat-proof
+  TUGBOAT_MUTATION_PLAN: .tugboat/proof/mutations.json
+
+jobs:
+  proof-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+      - name: Create proof directory
+        run: mkdir -p "$TUGBOAT_PROOF_DIR/reports"
+      - name: Prove critical gates detect declared defects
+        run: >-
+          node "$TUGBOAT_RUNTIME_DIR/scripts/tugboat.mjs" proof mutate
+          --repo .
+          --plan "$TUGBOAT_MUTATION_PLAN"
+          --output "$TUGBOAT_PROOF_DIR/reports/mutation.json"
+          --gate
+          -- npm test
+      - name: Capture exact full-gate context
+        if: always()
+        run: >-
+          node "$TUGBOAT_RUNTIME_DIR/scripts/tugboat.mjs" capsule capture
+          --repo .
+          --inputs package.json
+          --output "$TUGBOAT_PROOF_DIR/reports/test.capsule.json"
+          -- npm test
+      - name: Verify captured evidence
+        if: always()
+        run: >-
+          node "$TUGBOAT_RUNTIME_DIR/scripts/tugboat.mjs" capsule verify
+          --file "$TUGBOAT_PROOF_DIR/reports/test.capsule.json"
+          --repo .
+          --output "$TUGBOAT_PROOF_DIR/reports/capsule-verification.json"
+      - name: Upload content-addressed proof reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tugboat-proof-${{ github.run_id }}
+          path: /tmp/tugboat-proof/reports/*.json
+          if-no-files-found: error
+          retention-days: 14
