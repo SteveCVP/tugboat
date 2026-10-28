@@ -130,6 +130,7 @@ test("exports a neutral freestanding repository from the public allowlist", () =
   const dependabot = fs.readFileSync(path.join(destination, ".github", "dependabot.yml"), "utf8");
   assert.match(ci, /permissions:\n  contents: read/);
   assert.match(ci, /persist-credentials: false/);
+  assert.match(ci, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
   assert.doesNotMatch(ci, /uses:\s+[^\s]+@v\d/);
   assert.match(codeql, /security-events: write/);
   assert.match(codeql, /schedule:/);
