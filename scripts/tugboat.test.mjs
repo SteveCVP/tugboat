@@ -279,7 +279,10 @@ test("help and the reusable CI template expose bounded intelligence gates withou
   assert.match(template, /intelligence freshness/);
   assert.match(template, /if: always\(\)/);
   assert.match(template, /workflow_dispatch:\s*\n\s+inputs:\s*\n\s+base:\s*\n\s+description:/);
-  assert.match(template, /base:\s*\n(?:\s+.*\n)*?\s+required: true/);
+  const templateLines = template.split("\n");
+  const baseInputIndex = templateLines.indexOf("      base:");
+  assert.notEqual(baseInputIndex, -1);
+  assert.equal(templateLines[baseInputIndex + 2]?.trim(), "required: true");
   assert.match(template, /persist-credentials: false/);
   assert.doesNotMatch(template, /TUGBOAT_BASE:.*\|\|\s*github\.sha/);
   assert.doesNotMatch(template, /uses:\s+[^\s]+@v\d/);
