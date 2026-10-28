@@ -1,0 +1,8 @@
+node_modules/
+coverage/
+.worktrees/
+.superpowers/
+tugboat-eval-output/
+*.tmp
+*.tgz
+.tugboat-lock/

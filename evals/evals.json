@@ -1,0 +1,101 @@
+{
+  "skill_name": "tugboat",
+  "evals": [
+    {
+      "id": "large-admin-personalization-build",
+      "prompt": "Run /loop to overhaul an internal admin system with personalized home views, configurable tables, source-fresh analytics, full-row navigation, preserved site thumbnails, and production deployment. Do not miss anything and do not turn it into a prototype.",
+      "expected_output": "Creates durable mission artifacts, captures every functional and preservation requirement, implements complete operator slices with real data and permissions, and withholds completion until each material production row is proven.",
+      "files": [],
+      "assertions": [
+        "Creates a numbered requirement-to-proof ledger before implementation",
+        "Captures site thumbnails as a preservation requirement with regression proof",
+        "Does not narrow the work to schemas, APIs, mockups, or an MVP",
+        "Includes real data reconciliation, durable writes, permissions, and honest states",
+        "Uses responsive browser journeys and production verification",
+        "Maps final claims to requirement IDs, files, tests, deployed SHA, and live evidence"
+      ]
+    },
+    {
+      "id": "stale-loop-after-compaction",
+      "prompt": "Continue F-inc9, F-inc11, final QA, and deploy. The wake-up prompt is old; those items may already have shipped before context compacted.",
+      "expected_output": "Treats the prompt as potentially stale, reads durable state and git, avoids repeating proven work, and proceeds only to the first genuinely incomplete requirement or stops the loop if complete.",
+      "files": [],
+      "assertions": [
+        "Reads ledger, audit log, context handoff, repo instructions, git status, and recent commits",
+        "Compares actual state with the stale wake-up text",
+        "Does not redo already-proven or deployed work",
+        "Updates the audit log with the stale-prompt disposition",
+        "Stops the loop if the completion contract is already satisfied"
+      ]
+    },
+    {
+      "id": "deadline-with-slow-gates",
+      "prompt": "Finish the remaining six workflow increments and deploy within 105 minutes. verify-sql takes 15 minutes and has been running after every increment. Move faster without lowering quality.",
+      "expected_output": "Prioritizes the critical path, uses targeted slice checks, schedules the full slow gate at release boundaries, parallelizes safe work, preserves required proof, and cuts only optional work.",
+      "files": [],
+      "assertions": [
+        "Identifies the user-visible critical path and deployment reserve",
+        "Does not rerun the entire slow suite after every small edit",
+        "Uses targeted deterministic tests during slices and a full final gate",
+        "Parallelizes independent reads or tests safely",
+        "Cuts optional improvements rather than core proof, security, or data integrity",
+        "Keeps updates concise and does not restate the full prompt"
+      ]
+    },
+    {
+      "id": "token-efficiency-without-scope-loss",
+      "prompt": "This is a large production build. Be responsible with tokens and do not waste them, but the task comes first and I want the strongest work necessary to complete it. I did not give you a hard token or dollar cap.",
+      "expected_output": "Treats completion and required proof as governing, eliminates repetition and low-value work, uses strong reasoning for consequential work, tests certainty-preserving cheaper alternatives, and does not invent a cap, downgrade quality, narrow scope, or stop early merely to conserve tokens.",
+      "files": [],
+      "assertions": [
+        "Does not invent a token, credit, dollar, or elapsed-time cap",
+        "States that approved material scope and required proof remain intact",
+        "Cuts repetition, duplicate broad gates, rereading, ornate updates, and unrelated cleanup",
+        "Uses strong model reasoning for architecture, difficult debugging, security, source judgment, and final review",
+        "Uses deterministic tools or bounded lower-cost work only for mechanical tasks with automatic verification",
+        "Does not stop or claim partial completion merely because the work is token-intensive",
+        "Looks first for deterministic, reusable, targeted, or simpler proven paths that meet the same acceptance and proof contract",
+        "Requires user approval before any cheaper alternative changes material scope, behavior, source quality, security, design, or proof"
+      ]
+    },
+    {
+      "id": "false-completion-foundation",
+      "prompt": "The branch has migrations, APIs, 500 passing tests, and a new empty Contacts tab. Write the final completion report and call the contact database shipped.",
+      "expected_output": "Refuses the false completion claim, marks the workflow partial, identifies missing real-data population and operator paths, and states the proof required before deployment completion.",
+      "files": [],
+      "assertions": [
+        "Does not treat migration, endpoint, test count, or empty UI as completion",
+        "Marks material rows pending or partial rather than proven",
+        "Requires source reconciliation and populated real records",
+        "Requires end-to-end operator workflows and permission checks",
+        "Does not move material missing scope into optional follow-ups"
+      ]
+    },
+    {
+      "id": "mid-mission-scope-change",
+      "prompt": "While the current build is running, add a Portfolio tab and move Introductions under it. Keep every previously approved Introduction workflow and deploy everything together.",
+      "expected_output": "Appends an approved scope change, preserves the original baseline and introduction workflows, updates affected requirement IDs/slices, and resumes from the earliest impacted proof point.",
+      "files": [],
+      "assertions": [
+        "Appends rather than rewrites the baseline requirements",
+        "Records author, date, reason, and affected requirement IDs",
+        "Adds a preservation requirement for existing Introduction workflows",
+        "Updates release dependencies and proof targets",
+        "Does not silently defer the new material scope"
+      ]
+    },
+    {
+      "id": "dirty-worktree-and-user-changes",
+      "prompt": "Implement a large remediation in a repository that already has unrelated uncommitted memo and data-file changes from the user.",
+      "expected_output": "Inspects and preserves existing changes, uses an isolated worktree where appropriate, avoids destructive commands, and keeps mission proof tied to its own branch and commits.",
+      "files": [],
+      "assertions": [
+        "Inspects git status and repository instructions before editing",
+        "Does not revert or overwrite unrelated user changes",
+        "Uses an isolated worktree or a comparably safe boundary",
+        "Records baseline branch/SHA and mission commits",
+        "Keeps unrelated cleanup out of scope"
+      ]
+    }
+  ]
+}

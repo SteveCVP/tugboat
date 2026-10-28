@@ -1,0 +1,38 @@
+---
+name: tugboat
+description: Use when a development mission is large, multi-step, long-running, resumed across agents or CI, governed by a ledger, vulnerable to scope drift, or expected to reach verified production completion without missing requirements.
+---
+
+# Tugboat
+
+Carry the user's complete mission to an operator-usable, honestly proven result. The hash-chained event log and Git are the memory; chat summaries, generated Markdown, and scheduled prompts are not sources of truth.
+
+The approved outcome and required proof outrank token, time, and compute optimization. Tugboat removes repetition, re-reading, duplicate gates, and low-value work; it never reduces scope, model quality, correctness, security, data integrity, or production proof merely to appear economical.
+
+## Required Protocol
+
+1. Read repository instructions and `references/operating-protocol.md`. For long runs, deadlines, loops, or expensive gates, also read `references/efficiency-and-context.md`.
+2. Before implementation, create a mission with `tugboat init`. Capture every requirement, preservation instruction, proof target, release slice, deploy path, source digest, and Git baseline. Commit the genesis files before resuming.
+3. Before acting and after every handoff, run `tugboat next --dir tugboat --json`. Treat its digest as the exact compiled context: ready work, claims, blockers, acceptance, proof gaps, preservation duties, Git state, and next check. A completed packet means stop.
+4. When implementation language or runtime architecture is consequential and not already decided, run `tugboat language recommend --dir tugboat --repo . --json`. Add a bounded profile for explicit team, platform, constraint, priority, and requirement-signal evidence. Treat `insufficient_evidence` as a request for facts, not permission to guess; record the final human/engineering decision and report digest without treating the recommendation as proof.
+5. Use stable requirement IDs. Never silently narrow work to an MVP, schema, endpoint, shell, mockup, foundation, read-only surface, or follow-up.
+6. Build independently verifiable operator workflows. Existing source data must be reconciled when the feature depends on it; an empty interface is not complete.
+7. Capture typed evidence with `tugboat evidence` or a deployment adapter. At each verified slice boundary, use `checkpoint --evidence-ids ...`; prose is a note and cannot prove a row. A versioned checkpoint completes the satisfied slice and activates the earliest dependency-ready slice; after amendments or promotion, read a fresh packet because affected work can reopen an earlier slice.
+8. For concurrent workers, acquire a short `tugboat claim` only for independently owned open requirements, record the expected revision, and release it when stopping. A claim coordinates work; it never changes requirement status, proves work, grants repository access, or replaces an isolated worktree.
+9. For parallel or multi-model work, designate one coordinator as the only writer to the canonical target branch and mission. Workers create immutable `.tugboat` bundles with `bundle create`; the coordinator uses `bundle inspect`, `bundle compare`, a non-mutating `cherry-pick --dry-run`, and then a target-owned validation command for promotion. Never use ordinary Git cherry-pick as a substitute for bundle policy and provenance.
+10. Imported bundle proof is provenance, not completion. Promotion must reopen mapped target requirements and invalidate their active proof. Re-capture target-context command, operator/browser, deployment, and production evidence before claiming the row proven.
+11. Preserve requested workflows and design with regression proof. Record substantive specialist findings and dispositions; reviewer names alone are not gates.
+12. Use targeted gates per slice, affected integration gates at boundaries, and full gates before deploy or completion. After two materially identical failures, stop rerunning and diagnose root cause.
+13. Use `tugboat resume` after compaction, agent handoff, or wake-up. It fails closed on stale handoff, unrecorded commits, dirty work, source drift, or event tampering. Use `reconcile` only to account for measured state explicitly.
+14. Require `tugboat ci --dir tugboat --json` before deployment. Production evidence must independently verify the deployed SHA through GitHub Actions, CloudFormation, or a signed attestation.
+15. Use `tugboat close` only when every material row satisfies its proof target. It automatically checks the event chain, append-only baseline, evidence, source, Git, handoff, clean tree, production SHA, live operator proof, and preservation proof.
+
+## Truthful Status
+
+Use only `PENDING`, `IN_PROGRESS`, `BLOCKED`, `PROVEN(local)`, `PROVEN(production)`, and `WAIVED(user)`. A material approved item cannot disappear into follow-ups. If required work remains, the mission is partial or blocked.
+
+## Portability
+
+Use the same package, bundle envelope, and state format from Claude Code, Codex, developer shells, and headless CI. Install with `node scripts/install.mjs`; prefer `~/.agents/skills/tugboat` as the shared alias. Never hardcode a runtime home, model name, or actor. Keep updates concise: newly proven IDs, measured evidence, active slice, and one real blocker if present.
+
+Agent hosts may use `scripts/tugboat-mcp.mjs --dir MISSION --repo REPOSITORY`. Keep MCP read-only unless claim/release access is explicitly required; enable that boundary only with the startup flag `--allow-writes`. Mission and repository paths and write policy are process capabilities, never model-controlled tool arguments. `tugboat_language_recommend` is always advisory and read-only. MCP claim/release calls must carry `expectedRevision` and `expectedHead` from the latest packet.

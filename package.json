@@ -1,0 +1,31 @@
+{
+  "name": "tugboat-mission-control",
+  "version": "2.3.0",
+  "description": "Portable, fail-closed mission control for agentic software delivery",
+  "type": "module",
+  "bin": {
+    "tugboat": "scripts/tugboat.mjs",
+    "tugboat-mcp": "scripts/tugboat-mcp.mjs"
+  },
+  "files": [
+    "scripts/",
+    "evals/",
+    "templates/",
+    "references/",
+    "SKILL.md",
+    "README.md",
+    "MANIFEST.md",
+    "starter-prompts.md"
+  ],
+  "scripts": {
+    "test": "node --test scripts/*.test.mjs",
+    "test:behavior": "node scripts/run-behavior-evals.mjs --dry-run --max-total-budget-usd 2",
+    "export:distribution": "node scripts/export-distribution.mjs",
+    "verify:public": "node scripts/verify-public-repository.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "private": false
+}
