@@ -191,6 +191,21 @@ test("requires a linear ordered commit selection and known requirements", () => 
   assert.throws(() => createBundle(bundleOptions(context, { requirementIds: ["R404"] })), /unknown requirement/i);
 });
 
+test("bounds bundle commit and component operation counts before expensive processing", () => {
+  const context = fixture();
+  assert.throws(() => createBundle(bundleOptions(context, { commitShas: Array(65).fill(context.first), components: [] })), /exceeds 64 commits/i);
+  assert.throws(() => createBundle(bundleOptions(context, { commitShas: [], components: Array(129).fill(bundleOptions(context).components[0]) })), /exceeds 128 components/i);
+
+  const outputPath = path.join(context.repo, "bounded-candidate.tugboat");
+  createBundle(bundleOptions(context, { outputPath }));
+  const imported = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+  imported.payload.components = Array.from({ length: 129 }, (_, index) => ({
+    ...structuredClone(imported.payload.components[0]),
+    targetPath: `assets/component-${index}.bin`,
+  }));
+  assert.throws(() => readBundle(writeJson(path.join(context.repo, "oversized-operation-count.tugboat"), rehash(imported))), /exceeds 128 components/i);
+});
+
 test("associates each independently applicable commit patch with explicit requirement IDs", () => {
   const context = fixture();
   const envelope = createBundle(bundleOptions(context, {

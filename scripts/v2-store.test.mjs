@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { canonicalJson } from "./lib/canonical.mjs";
 import { withMissionLock } from "./lib/lock.mjs";
-import { redactSecrets, resolveActor, scanSecrets } from "./lib/security.mjs";
+import { assertNoSecrets, redactSecrets, resolveActor, scanSecrets } from "./lib/security.mjs";
 import { appendEvent, readState, replayEvents } from "./lib/store.mjs";
 
 function tempMission() {
@@ -37,6 +37,11 @@ test("secret scanner detects and redacts common credentials without changing ord
   const redacted = redactSecrets(secretText);
   for (const marker of ["[REDACTED AWS ACCESS KEY]", "[REDACTED GITHUB TOKEN]", "[REDACTED JWT]", "[REDACTED PRIVATE KEY]"]) assert.ok(redacted.includes(marker), marker);
   assert.equal(redactSecrets("Founder API strategy and key question are documented."), "Founder API strategy and key question are documented.");
+});
+
+test("object secret scanning cannot lose a credential at an escaped newline boundary", () => {
+  const fakeSecret = ["ghp", "123456789012345678901234567890123456"].join("_");
+  assert.throws(() => assertNoSecrets({ source: `ordinary line\n${fakeSecret}` }), /github-token/);
 });
 
 test("event store replays a hash chain and rejects tampering", () => {

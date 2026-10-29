@@ -11,6 +11,8 @@ export const BUNDLE_LIMITS = Object.freeze({
   maxComponentBytes: 25 * 1024 * 1024,
   maxBundleBytes: 50 * 1024 * 1024,
   maxEnvelopeBytes: 80 * 1024 * 1024,
+  maxCommits: 64,
+  maxComponents: 128,
 });
 
 const COMPONENT_TYPES = new Set([
@@ -233,6 +235,9 @@ export function createBundle(options) {
   if (!requirementIds.length) fail("Bundle needs at least one requirement ID");
   for (const id of requirementIds) if (!state.requirements[id]) fail(`Unknown requirement ${id}`);
   const selectedIds = new Set(requirementIds);
+  const limits = { ...BUNDLE_LIMITS, ...(options.limits ?? {}) };
+  if ((options.commitShas ?? []).length > limits.maxCommits) fail(`Bundle exceeds ${limits.maxCommits} commits`);
+  if ((options.components ?? []).length > limits.maxComponents) fail(`Bundle exceeds ${limits.maxComponents} components`);
   const commits = associateCommits(repo, orderedCommits(repo, options.commitShas), options.commitRequirements, requirementIds);
   if (!commits.length && !(options.components ?? []).length) fail("Bundle needs commits or components");
   const baseSha = commits[0]?.parents[0] ?? fullCommit(repo, "HEAD");
@@ -250,7 +255,6 @@ export function createBundle(options) {
       content: contents.toString("base64"),
     };
   });
-  const limits = { ...BUNDLE_LIMITS, ...(options.limits ?? {}) };
   const components = (options.components ?? []).map((item) => componentFromInput(repo, item, selectedIds, limits));
   const totalBytes = patches.reduce((sum, item) => sum + item.size, 0) + components.reduce((sum, item) => sum + item.size, 0);
   if (totalBytes > limits.maxBundleBytes) fail(`Bundle exceeds ${limits.maxBundleBytes} bytes of decoded content`);
@@ -337,6 +341,8 @@ function validateEnvelope(envelope, policy = {}) {
   const body = canonicalJson(payload);
   if (envelope.digest !== `sha256:${sha256(body)}`) fail("Bundle payload digest mismatch");
   const limits = { ...BUNDLE_LIMITS, ...(policy.limits ?? {}) };
+  if (payload.commits.length > limits.maxCommits) fail(`Bundle exceeds ${limits.maxCommits} commits`);
+  if (payload.components.length > limits.maxComponents) fail(`Bundle exceeds ${limits.maxComponents} components`);
   if (payload.patches.length !== payload.commits.length) fail("Bundle needs exactly one patch per commit");
   payload.commits.forEach((item, index) => {
     objectValue(item, `Bundle commit ${index}`);
@@ -405,6 +411,10 @@ function validateEnvelope(envelope, policy = {}) {
   }
   if (policy.requireSignature && signatureStatus !== "verified") fail("Bundle requires a signature verified by an explicit trusted public key");
   return { envelope, payload, digest: envelope.digest, signatureStatus, patches };
+}
+
+export function verifyBundleEnvelope(envelope, policy = {}) {
+  return validateEnvelope(envelope, policy);
 }
 
 export function readBundle(file, policy = {}) {

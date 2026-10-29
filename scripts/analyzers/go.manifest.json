@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "tugboat.adapter-manifest.v1",
+  "id": "tugboat.analyzer.go",
+  "runtime": "node20",
+  "entrypoint": "certified-analyzer.mjs",
+  "entrypointDigest": "sha256:ca0b0b84e684478234686781c4a95d8b2b591e267e988767e7cb9125ecf829f9",
+  "assets": [{ "path": "analyzer-runtime.mjs", "digest": "sha256:7fae345e96f4910dbf91dc0a62b8270e63ebc9337590bf983ade00fe55939d86" }],
+  "inputSchema": { "type": "object", "properties": { "analyzer": { "type": "string" }, "beforePath": { "type": "string" }, "beforeDigest": { "type": "string" }, "beforeSource": { "type": "string" }, "afterPath": { "type": "string" }, "afterDigest": { "type": "string" }, "afterSource": { "type": "string" } }, "required": ["analyzer", "beforePath", "beforeDigest", "beforeSource", "afterPath", "afterDigest", "afterSource"], "additionalProperties": false },
+  "outputSchema": { "type": "object", "properties": { "status": { "type": "string" }, "compatibility": { "type": "object" }, "effects": { "type": "array" }, "uncertainty": { "type": "array" }, "counterexamples": { "type": "array" } }, "required": ["status", "compatibility", "effects", "uncertainty", "counterexamples"], "additionalProperties": false },
+  "capabilities": ["analyze:go-public-surface"],
+  "allowedInputPaths": [],
+  "environment": [],
+  "timeoutMs": 5000,
+  "maxOutputBytes": 1048576,
+  "isolation": "brokered"
+}

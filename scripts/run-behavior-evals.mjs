@@ -6,6 +6,8 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { isMainModule } from "./lib/entrypoint.mjs";
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SKILL = path.dirname(HERE);
 const DEFAULT_EVALS = path.join(SKILL, "evals", "evals.json");
@@ -83,7 +85,7 @@ function callClaude({ binary, model, budget, timeoutMs, cwd, prompt, systemFile,
   return parseClaudeEnvelope(result.stdout);
 }
 
-function judgeSchema() {
+function judgeSchema(evaluation) {
   return {
     type: "object",
     additionalProperties: false,
@@ -91,6 +93,8 @@ function judgeSchema() {
     properties: {
       assertions: {
         type: "array",
+        minItems: evaluation.assertions.length,
+        maxItems: evaluation.assertions.length,
         items: {
           type: "object",
           additionalProperties: false,
@@ -106,6 +110,33 @@ function judgeSchema() {
       verdict: { type: "string" },
     },
   };
+}
+
+function validateScore(value, label, expected) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(`${label} must be a finite number from 0 to 1`);
+  }
+  if (Math.abs(value - expected) > 1e-12) throw new Error(`${label} does not equal the assertion pass fraction`);
+}
+
+function validateJudge(evaluation, judge) {
+  if (!judge || typeof judge !== "object" || Array.isArray(judge)) throw new Error("Judge response must be an object");
+  if (!Array.isArray(judge.assertions) || judge.assertions.length !== evaluation.assertions.length) {
+    throw new Error("Judge response must cover every assertion exactly once");
+  }
+  judge.assertions.forEach((assertion, index) => {
+    if (!assertion || typeof assertion !== "object" || Array.isArray(assertion)) throw new Error(`Judge assertion ${index + 1} must be an object`);
+    if (assertion.text !== evaluation.assertions[index]) throw new Error(`Judge assertion ${index + 1} does not match the supplied assertion`);
+    if (typeof assertion.baseline !== "boolean" || typeof assertion.treatment !== "boolean") throw new Error(`Judge assertion ${index + 1} needs boolean scores`);
+    if (typeof assertion.evidence !== "string" || assertion.evidence.trim().length === 0) throw new Error(`Judge assertion ${index + 1} needs evidence`);
+  });
+  const count = judge.assertions.length;
+  const baseline = count ? judge.assertions.filter(({ baseline: passed }) => passed).length / count : 0;
+  const treatment = count ? judge.assertions.filter(({ treatment: passed }) => passed).length / count : 0;
+  validateScore(judge.baseline_score, "baseline_score", baseline);
+  validateScore(judge.treatment_score, "treatment_score", treatment);
+  if (typeof judge.verdict !== "string" || judge.verdict.trim().length === 0) throw new Error("Judge verdict must be a non-empty string");
+  return judge;
 }
 
 function generationPrompt(evaluation) {
@@ -128,7 +159,7 @@ function main() {
   const limit = Math.min(numberArg(args, "limit", evals.length), evals.length);
   const selected = evals.slice(0, limit);
   const perCall = numberArg(args, "max-per-call-usd", 0.05);
-  const totalLimit = numberArg(args, "max-total-budget-usd", 1);
+  const totalLimit = numberArg(args, "max-total-budget-usd", 2);
   const plannedCalls = selected.length * 3;
   const maximumBudgetUsd = Number((plannedCalls * perCall).toFixed(2));
   if (maximumBudgetUsd > totalLimit) {
@@ -167,9 +198,9 @@ function main() {
       fs.writeFileSync(path.join(out, "responses", `${evaluation.id}.treatment.txt`), `${treatment}\n`);
       const judged = callClaude({
         binary, model, budget: perCall, timeoutMs, cwd: out,
-        prompt: judgePrompt(evaluation, baseline, treatment), schema: judgeSchema(),
+        prompt: judgePrompt(evaluation, baseline, treatment), schema: judgeSchema(evaluation),
       });
-      const judge = typeof judged === "string" ? JSON.parse(judged) : judged;
+      const judge = validateJudge(evaluation, typeof judged === "string" ? JSON.parse(judged) : judged);
       report.results.push({ id: evaluation.id, judge });
       fs.writeFileSync(path.join(out, "report.json"), JSON.stringify(report, null, 2));
     } catch (error) {
@@ -187,11 +218,13 @@ function main() {
   console.log(`Tugboat behavior evaluation complete: ${improved}/${report.results.length} scenarios improved`);
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(error.message);
-  process.exit(1);
+if (isMainModule(import.meta.url)) {
+  try {
+    main();
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
 }
 
-export { callClaude, generationPrompt, judgePrompt, systemBundle };
+export { callClaude, generationPrompt, judgePrompt, systemBundle, validateJudge };

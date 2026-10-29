@@ -143,6 +143,20 @@ function snapshot(context) {
   };
 }
 
+function preservationProof(bundleDigest) {
+  const body = {
+    kind: "non_interference",
+    authority: "invalidation_only",
+    witnessDigest: `sha256:${"a".repeat(64)}`,
+    invalidationDigest: `sha256:${"b".repeat(64)}`,
+    bundleDigest,
+    boundaryManifestDigest: `sha256:${"c".repeat(64)}`,
+    retainedNodeIds: ["requirement:R-WORK"],
+    invalidatedNodeIds: ["requirement:R-UI"],
+  };
+  return { ...body, digest: `sha256:${sha256(canonicalJson(body))}` };
+}
+
 test("plans mapped selective impact and dry-run leaves the target byte-for-byte unchanged", () => {
   const context = pair();
   const before = snapshot(context);
@@ -157,6 +171,20 @@ test("plans mapped selective impact and dry-run leaves the target byte-for-byte 
   const dryRun = promoteBundle(options(context, { dryRun: true }));
   assert.equal(dryRun.dryRun, true);
   assert.deepEqual(snapshot(context), before);
+});
+
+test("promotion carries verified non-interference only as invalidation preservation metadata", () => {
+  const context = pair();
+  const bundleDigest = JSON.parse(fs.readFileSync(context.bundlePath, "utf8")).digest;
+  const proof = preservationProof(bundleDigest);
+  const plan = planPromotion(options(context, { preservationProofs: [proof] }));
+  assert.deepEqual(plan.preservationProofs, [proof]);
+  const result = promoteBundle(options(context, { preservationProofs: [proof] }));
+  assert.deepEqual(result.preservationProofs, [proof]);
+  const state = readState(context.targetMission);
+  assert.deepEqual(state.promotions[0].preservationProofs, [proof]);
+  assert.equal(state.requirements["R-UI"].status, "IN_PROGRESS");
+  assert.deepEqual(state.requirements["R-UI"].evidenceRefs, []);
 });
 
 test("requires complete one-to-one mappings and satisfied promoted bundle dependencies", () => {

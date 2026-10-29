@@ -1,6 +1,6 @@
 {
   "name": "tugboat-mission-control",
-  "version": "2.3.0",
+  "version": "4.0.0",
   "description": "Portable, fail-closed mission control for agentic software delivery",
   "type": "module",
   "bin": {
@@ -12,6 +12,7 @@
     "evals/",
     "templates/",
     "references/",
+    "docs/release-audit-4.0.0.md",
     "SKILL.md",
     "README.md",
     "MANIFEST.md",
@@ -19,7 +20,7 @@
   ],
   "scripts": {
     "test": "node --test scripts/*.test.mjs",
-    "test:behavior": "node scripts/run-behavior-evals.mjs --dry-run --max-total-budget-usd 2",
+    "test:behavior": "node scripts/run-behavior-evals.mjs --dry-run --max-total-budget-usd 3",
     "export:distribution": "node scripts/export-distribution.mjs",
     "verify:public": "node scripts/verify-public-repository.mjs"
   },

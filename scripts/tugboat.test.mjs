@@ -264,3 +264,27 @@ test("language recommend CLI refuses to turn hype-only requirements into archite
   assert.deepEqual(report.antiSlop.unclassifiedRequirementIds, ["R1"]);
   assert.deepEqual(fs.readFileSync(eventsPath), before);
 });
+
+test("help and the reusable CI template expose bounded intelligence gates without secret access", () => {
+  const dir = setupRepo();
+  const help = run(dir, ["--help"]);
+  for (const operation of ["impact", "lint", "simulate", "route", "memory", "portfolio", "freshness", "trust", "adversary", "federation"]) {
+    assert.match(help, new RegExp(`intelligence .*${operation}|${operation}.*intelligence`), operation);
+  }
+  const template = fs.readFileSync(path.join(HERE, "..", "templates", "github", "tugboat-intelligence.yml"), "utf8");
+  assert.match(template, /permissions:\n\s+contents: read/);
+  assert.match(template, /intelligence impact/);
+  assert.match(template, /intelligence lint/);
+  assert.match(template, /intelligence adversary/);
+  assert.match(template, /intelligence freshness/);
+  assert.match(template, /if: always\(\)/);
+  assert.match(template, /workflow_dispatch:\s*\n\s+inputs:\s*\n\s+base:\s*\n\s+description:/);
+  const templateLines = template.split("\n");
+  const baseInputIndex = templateLines.indexOf("      base:");
+  assert.notEqual(baseInputIndex, -1);
+  assert.equal(templateLines[baseInputIndex + 2]?.trim(), "required: true");
+  assert.match(template, /persist-credentials: false/);
+  assert.doesNotMatch(template, /TUGBOAT_BASE:.*\|\|\s*github\.sha/);
+  assert.doesNotMatch(template, /uses:\s+[^\s]+@v\d/);
+  assert.doesNotMatch(template, /secrets\.|pull-requests:\s*write|contents:\s*write/);
+});

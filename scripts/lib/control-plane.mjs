@@ -1,8 +1,9 @@
 import { canonicalJson, sha256 } from "./canonical.mjs";
 import { gitSnapshot } from "./evidence.mjs";
+import { readMissionState } from "./intelligence-core.mjs";
 import { activeRequirementIds, missionReducer } from "./reducer.mjs";
 import { renderMission } from "./render.mjs";
-import { appendEvent, readState, replayEvents } from "./store.mjs";
+import { appendEvent } from "./store.mjs";
 
 const OPEN_STATUSES = new Set(["PENDING", "IN_PROGRESS", "BLOCKED"]);
 
@@ -127,15 +128,7 @@ export function compileExecutionPacket(state, { observedAt, git = null }) {
   return { ...body, packetDigest: `sha256:${sha256(canonicalJson(body))}` };
 }
 
-function missionState(dir) {
-  const replayed = replayEvents(dir, { reducer: missionReducer }).state;
-  const stored = readState(dir);
-  if (!stored?.metadata) throw new Error(`No Tugboat v2 state in ${dir}`);
-  if (stored.revision !== replayed.revision || stored.lastEventHash !== replayed.lastEventHash) {
-    throw new Error("state.json does not match event replay");
-  }
-  return replayed;
-}
+const missionState = readMissionState;
 
 function currentHead(state, dir) {
   return gitSnapshot(state.metadata.worktree, { excludePaths: [dir] }).sha;

@@ -7,21 +7,42 @@ import path from "node:path";
 import process from "node:process";
 
 import { sha256 } from "./lib/canonical.mjs";
+import { conformAdapter, inspectAdapter, runAdapter } from "./lib/adapter-sdk.mjs";
+import { loadBoundaryManifest, readBoundaryManifest } from "./lib/boundary-manifest.mjs";
 import { compareBundles, createBundle, inspectBundle, readBundle } from "./lib/bundle.mjs";
+import { compileBundleAlgebra } from "./lib/bundle-algebra.mjs";
+import { composeBundles, planComposition, verifyCompositionCertificate, verifyMergeCertificate } from "./lib/composition.mjs";
+import { CERTIFIED_CHANGESET_LIMITS } from "./lib/certified-changeset.mjs";
+import { compileCausalGraph } from "./lib/causal-kernel.mjs";
+import { compileImpactGraph, inspectTrackedChanges } from "./lib/causality-intelligence.mjs";
 import { claimRequirements, compileExecutionPacket, releaseClaim } from "./lib/control-plane.mjs";
 import { assertContinuity, inspectContinuity, reconcileMission } from "./lib/continuity.mjs";
+import { compileDecisionMemory } from "./lib/decision-memory.mjs";
 import { verifyDeploymentEvidence } from "./lib/deployment.mjs";
+import { compileDifferentialReview } from "./lib/differential-review.mjs";
+import { captureEvidenceCapsule, replayEvidenceCapsule, verifyEvidenceCapsule } from "./lib/evidence-capsule.mjs";
 import { isMainModule } from "./lib/entrypoint.mjs";
 import { captureCommandEvidence, captureObservationEvidence, checkpointMission, gitSnapshot, recordEvidence } from "./lib/evidence.mjs";
+import { compileFederation } from "./lib/federation.mjs";
+import { explainMissionHistory, explainRollbackHistory } from "./lib/history-debugger.mjs";
+import { readMissionState } from "./lib/intelligence-core.mjs";
 import { compileLanguageRecommendation, MAX_PROFILE_BYTES } from "./lib/language-optimizer.mjs";
 import { closeMission, MissionValidationError, validateMission } from "./lib/mission-validator.mjs";
 import { migrateLegacyMission } from "./lib/migrate.mjs";
+import { certifyBundleNonInterference, readAndVerifyNonInterferenceWitness, verifyBundleNonInterference, writeNonInterferenceWitness } from "./lib/non-interference.mjs";
+import { compileEvidenceFreshness, compileProofPortfolio, compileReleaseSimulation } from "./lib/proof-intelligence.mjs";
+import { runProofMutations } from "./lib/proof-mutation.mjs";
 import { promoteBundle } from "./lib/promotion.mjs";
+import { createProofProvenance, verifyProofProvenance } from "./lib/provenance.mjs";
+import { compileAdversarialAcceptance, compileAntiSlopReport } from "./lib/quality-intelligence.mjs";
 import { backupMission, rebuildMission } from "./lib/recovery.mjs";
 import { activeRequirementIds, createMission, missionReducer } from "./lib/reducer.mjs";
 import { renderMission } from "./lib/render.mjs";
+import { proveRollbackEquivalence, verifyRollbackCertificate } from "./lib/rollback-equivalence.mjs";
+import { compileExecutionRouting } from "./lib/routing-intelligence.mjs";
 import { resolveActor } from "./lib/security.mjs";
 import { appendEvent, readState, replayEvents } from "./lib/store.mjs";
+import { compileTrustGraph } from "./lib/trust-intelligence.mjs";
 import { computeSourceDigest, validateLedger } from "./validate-ledger.mjs";
 
 const REQUIREMENT_COLUMNS = [
@@ -40,7 +61,7 @@ function die(message) {
 function parseArgs(argv) {
   const [rawCommand, ...rest] = argv;
   const command = rawCommand === "--help" ? undefined : rawCommand;
-  const subcommand = ["bundle", "language"].includes(command) && rest[0] && !rest[0].startsWith("--") ? rest.shift() : undefined;
+  const subcommand = ["adapter", "boundary", "bundle", "capsule", "certificate", "history", "intelligence", "kernel", "language", "proof", "provenance", "review", "rollback"].includes(command) && rest[0] && !rest[0].startsWith("--") ? rest.shift() : undefined;
   const values = new Map();
   const flags = new Set(rawCommand === "--help" ? ["help"] : []);
   for (let index = 0; index < rest.length; index += 1) {
@@ -485,6 +506,172 @@ function handleBundleCompare(args) {
   printResult(comparison, args, (item) => `Compared ${item.candidateCount} bundles: ${item.candidates.map((candidate) => candidate.id).join(", ")}\nComponent conflicts: ${item.components.filter((component) => component.conflict).length}`);
 }
 
+function handleBundleAlgebra(args) {
+  if (args.subcommand === "compose" && args.values.has("manifest")) {
+    if (args.flags.has("apply") === args.flags.has("dry-run")) die("executable bundle compose requires exactly one of --dry-run or --apply");
+    if (args.flags.has("apply") && (!args.values.has("composition-certificate") || !args.values.has("merge-certificate"))) {
+      die("bundle compose --apply requires --composition-certificate and --merge-certificate so admission evidence is durably emitted");
+    }
+    const manifestFile = path.resolve(required(args, "manifest"));
+    const input = boundedJsonPath(manifestFile, "bundle composition manifest");
+    if (!input || typeof input !== "object" || Array.isArray(input) || !Array.isArray(input.candidates)) die("Bundle composition manifest must contain a candidates array");
+    for (const field of Object.keys(input)) if (!["candidates", "gates", "generatedAt", "rollbackAdmission"].includes(field)) die(`Unknown bundle composition manifest field ${field}`);
+    const manifestDir = path.dirname(manifestFile);
+    let rollbackAdmission = { required: false };
+    if (input.rollbackAdmission !== undefined) {
+      const declaration = input.rollbackAdmission;
+      if (!declaration || typeof declaration !== "object" || Array.isArray(declaration) || typeof declaration.required !== "boolean") die("rollbackAdmission needs a boolean required field");
+      const allowed = declaration.required ? ["required", "boundaryManifest", "policy", "runtimeEffects"] : ["required"];
+      for (const field of Object.keys(declaration)) if (!allowed.includes(field)) die(`Unknown rollbackAdmission field ${field}`);
+      if (declaration.required) {
+        if (typeof declaration.boundaryManifest !== "string" || !declaration.boundaryManifest || !declaration.policy || typeof declaration.policy !== "object" || Array.isArray(declaration.policy) || !Array.isArray(declaration.runtimeEffects)) die("Required rollback admission needs boundaryManifest, policy, and runtimeEffects");
+        rollbackAdmission = {
+          required: true,
+          boundary: loadBoundaryManifest(path.resolve(manifestDir, declaration.boundaryManifest)).envelope,
+          policy: declaration.policy,
+          runtimeEffects: declaration.runtimeEffects,
+        };
+      }
+    }
+    const candidates = input.candidates.map((candidate) => {
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) die("Bundle composition candidates must be objects");
+      const allowed = ["bundlePath", "requirementIds", "mappings", "witnessFile", "boundaryManifest", "proofGraph", "root", "analyzerReports"];
+      for (const field of Object.keys(candidate)) if (!allowed.includes(field)) die(`Unknown bundle composition candidate field ${field}`);
+      for (const field of ["bundlePath", "witnessFile", "boundaryManifest", "proofGraph", "root"]) if (typeof candidate[field] !== "string" || !candidate[field]) die(`Bundle composition candidate is missing ${field}`);
+      const bundlePath = path.resolve(manifestDir, candidate.bundlePath);
+      const rootDir = path.resolve(manifestDir, candidate.root);
+      const loadedBoundary = loadBoundaryManifest(path.resolve(manifestDir, candidate.boundaryManifest), { rootDir });
+      const boundary = loadedBoundary.envelope;
+      const bundle = readBundle(bundlePath, bundlePolicy(args));
+      const witness = readAndVerifyNonInterferenceWitness(path.resolve(manifestDir, candidate.witnessFile), { bundle, boundary, rootDir });
+      const affectedComponents = new Set([
+        ...(witness.payload.body.directlyAffectedComponentIds ?? []),
+        ...(witness.payload.body.transitivelyAffectedComponentIds ?? []),
+      ]);
+      const requiredInvalidatedGateIds = new Set(Object.values(loadedBoundary.verification.gates).filter((gate) => gate.mandatory).map((gate) => gate.id));
+      const certifiedAnalyzerIds = new Set(["cloudformation-cdk", "github-actions", "go", "graphql", "oci", "openapi", "python", "sql", "terraform", "typescript"]);
+      const affectedSubjects = new Set(affectedComponents);
+      for (const component of loadedBoundary.verification.components) {
+        if (!affectedComponents.has(component.id)) continue;
+        for (const interfaceId of component.interfaceIds) affectedSubjects.add(interfaceId);
+        for (const gateId of component.gateIds) requiredInvalidatedGateIds.add(gateId);
+        for (const invariantId of component.invariantIds) {
+          const invariant = loadedBoundary.verification.invariants[invariantId];
+          for (const subjectId of invariant?.subjectIds ?? []) affectedSubjects.add(subjectId);
+          for (const gateId of invariant?.gateIds ?? []) requiredInvalidatedGateIds.add(gateId);
+        }
+      }
+      for (const invariant of Object.values(loadedBoundary.verification.invariants)) {
+        if (invariant.subjectIds.some((subjectId) => affectedSubjects.has(subjectId))) for (const gateId of invariant.gateIds) requiredInvalidatedGateIds.add(gateId);
+      }
+      for (const gate of Object.values(loadedBoundary.verification.gates)) {
+        if (gate.subjectIds.some((subjectId) => affectedSubjects.has(subjectId))) requiredInvalidatedGateIds.add(gate.id);
+      }
+      return {
+        bundlePath,
+        requirementIds: candidate.requirementIds,
+        mappings: candidate.mappings,
+        analyzerReports: candidate.analyzerReports,
+        witness,
+        proofGraph: boundedJsonPath(path.resolve(manifestDir, candidate.proofGraph), `proof invalidation graph for ${bundle.payload.id}`),
+        policyGates: Object.values(loadedBoundary.verification.gates).map((gate) => ({ id: gate.id, kind: gate.kind, mandatory: gate.mandatory })).sort((left, right) => left.id.localeCompare(right.id)),
+        policyRequiredInvalidatedGateIds: [...requiredInvalidatedGateIds].sort(),
+        analyzerObligations: Object.values(loadedBoundary.verification.interfaces)
+          .filter((descriptor) => certifiedAnalyzerIds.has(descriptor.kind))
+          .map((descriptor) => ({ analyzerId: descriptor.kind, path: descriptor.path }))
+          .sort((left, right) => `${left.analyzerId}:${left.path}`.localeCompare(`${right.analyzerId}:${right.path}`)),
+      };
+    });
+    const missionDir = path.resolve(required(args, "dir"));
+    const state = readState(missionDir);
+    if (!state?.metadata) die(`No Tugboat v2 target mission in ${missionDir}`);
+    const compositionOptions = {
+      missionDir,
+      candidates,
+      gates: input.gates ?? [],
+      actor: resolvedActor(args, state.metadata.worktree),
+      generatedAt: input.generatedAt,
+      rollbackAdmission,
+      ...bundlePolicy(args),
+      compositionCertificatePath: args.values.get("composition-certificate"),
+      mergeCertificatePath: args.values.get("merge-certificate"),
+    };
+    const result = args.flags.has("apply") ? composeBundles(compositionOptions) : planComposition(compositionOptions);
+    printResult(result, args, (item) => item.dryRun
+      ? `Composition proof ready: ${item.certificate.payload.body.canonicalOrder.join(" -> ")}; ${item.certificate.payload.body.orders.length} dependency-valid orders; target unchanged`
+      : item.status === "complete"
+        ? `Composition merged at ${item.head}: ${item.canonicalOrder.join(" -> ")}; certificates published`
+        : `RECOVERY REQUIRED after composition target movement at ${item.head}: ${item.evidenceEmission.reason ?? "one or more certificate artifacts remain staged"}`);
+    if (!result.dryRun && result.status === "recovery_required") process.exitCode = 5;
+    return;
+  }
+  const input = boundedJsonPath(required(args, "candidates"), "bundle algebra candidates");
+  if (!input || typeof input !== "object" || Array.isArray(input) || !Array.isArray(input.candidates)) die("Bundle algebra candidates file must contain a candidates array");
+  if (args.subcommand === "compose" && !args.flags.has("dry-run")) die("bundle compose is planning-only in this release; pass --dry-run");
+  const report = compileBundleAlgebra({ candidates: input.candidates, proposedOrder: input.proposedOrder });
+  printResult(report, args, (item) => `Bundle algebra: ${item.verdict}; order ${item.canonicalOrder.join(" -> ")}; hazards ${item.hazards.length}; execution authorized: no`);
+}
+
+function certifiedSummary(item) {
+  return `Certified changeset ${item.bundleId}: ${item.verdict}; direct ${item.directlyAffectedComponentIds.length}; dependent ${item.transitivelyAffectedComponentIds.length}; unaffected ${item.provenUnaffectedComponentIds.length}`;
+}
+
+function handleBundleCertify(args) {
+  const rootDir = path.resolve(args.values.get("root") ?? process.cwd());
+  const bundle = readBundle(path.resolve(required(args, "bundle")), bundlePolicy(args));
+  const boundary = loadBoundaryManifest(path.resolve(required(args, "boundary-manifest")), { rootDir }).envelope;
+  const witness = certifyBundleNonInterference({
+    bundle,
+    boundary,
+    rootDir,
+    producer: resolvedActor(args, rootDir),
+    generatedAt: args.values.get("generated-at") ?? new Date().toISOString(),
+  });
+  writeNonInterferenceWitness(path.resolve(required(args, "output")), witness);
+  const result = verifyBundleNonInterference(witness, { bundle, boundary, rootDir });
+  printResult(result, args, certifiedSummary);
+}
+
+function handleCertificate(args) {
+  if (args.subcommand === "verify-rollback") {
+    const certificate = boundedJsonPath(required(args, "file"), "rollback certificate", CERTIFIED_CHANGESET_LIMITS.maxEnvelopeBytes);
+    const result = verifyRollbackCertificate(certificate, { repository: path.resolve(required(args, "repository")) });
+    printResult(result, args, (item) => `Rollback certificate verified: ${item.status}; ${item.digest}`);
+    return;
+  }
+  if (args.subcommand === "verify-composition") {
+    const certificate = boundedJsonPath(required(args, "file"), "composition certificate", CERTIFIED_CHANGESET_LIMITS.maxEnvelopeBytes);
+    const result = verifyCompositionCertificate(certificate, { repository: args.values.has("repository") ? path.resolve(args.values.get("repository")) : undefined });
+    printResult(result, args, (item) => `Composition certificate verified: ${item.digest}`);
+    return;
+  }
+  if (args.subcommand === "verify-merge") {
+    const certificate = boundedJsonPath(required(args, "file"), "merge certificate", CERTIFIED_CHANGESET_LIMITS.maxEnvelopeBytes);
+    const compositionCertificate = boundedJsonPath(required(args, "composition"), "composition certificate", CERTIFIED_CHANGESET_LIMITS.maxEnvelopeBytes);
+    const result = verifyMergeCertificate(certificate, { compositionCertificate, repository: args.values.get("repository") });
+    printResult(result, args, (item) => `Merge certificate verified: ${item.digest}`);
+    return;
+  }
+  if (args.subcommand !== "verify") die(`Unknown certificate subcommand: ${args.subcommand ?? "none"}\n${usage()}`);
+  const rootDir = path.resolve(args.values.get("root") ?? process.cwd());
+  const bundle = readBundle(path.resolve(required(args, "bundle")), bundlePolicy(args));
+  const boundary = loadBoundaryManifest(path.resolve(required(args, "boundary-manifest")), { rootDir }).envelope;
+  const result = readAndVerifyNonInterferenceWitness(path.resolve(required(args, "file")), { bundle, boundary, rootDir });
+  printResult(result, args, certifiedSummary);
+}
+
+function handleBoundary(args) {
+  if (args.subcommand !== "verify") die(`Unknown boundary subcommand: ${args.subcommand ?? "none"}\n${usage()}`);
+  const file = path.resolve(required(args, "file"));
+  const rootDir = path.resolve(args.values.get("root") ?? process.cwd());
+  const result = readBoundaryManifest(file, { rootDir });
+  printResult(
+    result,
+    args,
+    (item) => `Boundary manifest ${item.id}: ${item.status}; ${item.componentCount} components\nDigest: ${item.digest}`,
+  );
+}
+
 function handleCherryPick(args) {
   const missionDir = path.resolve(required(args, "dir"));
   const state = readState(missionDir);
@@ -622,6 +809,318 @@ function handleLanguageRecommend(args) {
   console.log(`Why: ${report.recommendation.rationale[0]}`);
   console.log(`Evidence gaps: ${report.uncertainties.join(" ") || "none in the declared decision inputs"}`);
   console.log(`Decision: ${report.digest}`);
+}
+
+const MAX_INTELLIGENCE_INPUT_BYTES = 1024 * 1024;
+const INTELLIGENCE_OPERATIONS = new Set([
+  "adversary",
+  "federation",
+  "freshness",
+  "impact",
+  "lint",
+  "memory",
+  "portfolio",
+  "route",
+  "simulate",
+  "trust",
+]);
+
+function intelligenceJsonFile(args, name, { optional = false, profile = false } = {}) {
+  const input = args.values.get(name);
+  if (!input) {
+    if (optional) return undefined;
+    die(`Missing --${name}`);
+  }
+  const file = path.resolve(input);
+  let size;
+  try {
+    size = fs.statSync(file).size;
+  } catch {
+    die(`Cannot read --${name} JSON file`);
+  }
+  const limit = profile ? MAX_PROFILE_BYTES : MAX_INTELLIGENCE_INPUT_BYTES;
+  if (size > limit) die(`${name} exceeds ${profile ? "64 KiB" : "1 MiB"}`);
+  let source;
+  try {
+    source = fs.readFileSync(file, "utf8");
+  } catch {
+    die(`Cannot read --${name} JSON file`);
+  }
+  if (Buffer.byteLength(source) > limit) die(`${name} exceeds ${profile ? "64 KiB" : "1 MiB"}`);
+  try {
+    return JSON.parse(source);
+  } catch {
+    die(`Invalid JSON in --${name}`);
+  }
+}
+
+function intelligenceState(args) {
+  return readMissionState(v2MissionDir(args));
+}
+
+function compileIntelligence(args) {
+  const operation = args.subcommand;
+  if (!INTELLIGENCE_OPERATIONS.has(operation)) die(`Unknown intelligence operation: ${operation ?? "none"}`);
+  if (operation === "impact") {
+    const state = intelligenceState(args);
+    const repo = path.resolve(args.values.get("repo") ?? state.metadata.worktree);
+    const base = args.values.get("base") ?? state.metadata.baselineGitSha;
+    const head = args.values.get("head") ?? "HEAD";
+    const profile = intelligenceJsonFile(args, "profile", { profile: true });
+    return compileImpactGraph(state, inspectTrackedChanges(repo, base, head).changes, profile);
+  }
+  if (operation === "lint") {
+    return compileAntiSlopReport(intelligenceState(args), intelligenceJsonFile(args, "profile", { optional: true, profile: true }) ?? {});
+  }
+  if (operation === "simulate") {
+    return compileReleaseSimulation(
+      intelligenceState(args),
+      intelligenceJsonFile(args, "profile", { optional: true, profile: true }) ?? {},
+      intelligenceJsonFile(args, "impact", { optional: true }),
+      intelligenceJsonFile(args, "adversarial", { optional: true }),
+    );
+  }
+  if (operation === "route") {
+    return compileExecutionRouting(
+      intelligenceState(args),
+      intelligenceJsonFile(args, "workers"),
+      intelligenceJsonFile(args, "profile", { profile: true }),
+      required(args, "observed-at"),
+      intelligenceJsonFile(args, "trust", { optional: true }),
+    );
+  }
+  if (operation === "memory") {
+    return compileDecisionMemory(
+      intelligenceJsonFile(args, "records"),
+      intelligenceJsonFile(args, "context"),
+      required(args, "observed-at"),
+    );
+  }
+  if (operation === "portfolio") {
+    return compileProofPortfolio(
+      intelligenceState(args),
+      intelligenceJsonFile(args, "impact"),
+      intelligenceJsonFile(args, "catalog"),
+    );
+  }
+  if (operation === "freshness") {
+    return compileEvidenceFreshness(
+      intelligenceState(args),
+      intelligenceJsonFile(args, "policy"),
+      required(args, "observed-at"),
+      intelligenceJsonFile(args, "impact", { optional: true }),
+    );
+  }
+  if (operation === "trust") {
+    return compileTrustGraph(intelligenceJsonFile(args, "graph"), intelligenceJsonFile(args, "policy"));
+  }
+  if (operation === "adversary") {
+    return compileAdversarialAcceptance(intelligenceState(args), intelligenceJsonFile(args, "profile", { optional: true, profile: true }) ?? {});
+  }
+  return compileFederation(intelligenceJsonFile(args, "manifest"));
+}
+
+function intelligenceGaps(report) {
+  const candidates = [
+    ...(report.gaps ?? []),
+    ...(report.findings ?? []).filter(({ severity }) => severity === "error"),
+    ...(report.unassigned ?? []),
+    ...(report.violations ?? []),
+    ...(report.uncoveredObligations ?? []),
+    ...(report.oracleGaps ?? []),
+    ...(report.journeys ?? []).filter(({ verdict }) => verdict === "blocked"),
+  ];
+  return candidates.slice(0, 3).map((item) => {
+    if (typeof item === "string") return item;
+    return item.message ?? item.code ?? item.ruleId ?? item.requirementId ?? item.id ?? JSON.stringify(item);
+  });
+}
+
+function handleIntelligence(args) {
+  const report = compileIntelligence(args);
+  if (args.flags.has("json")) console.log(JSON.stringify(report, null, 2));
+  else {
+    console.log(`${args.subcommand}: ${report.status}`);
+    for (const gap of intelligenceGaps(report)) console.log(`Gap: ${gap}`);
+    console.log(`Digest: ${report.digest}`);
+  }
+  if (args.flags.has("gate") && report.status !== "ready") process.exitCode = 2;
+}
+
+function jsonFileArgument(args, name, { optional = false } = {}) {
+  return intelligenceJsonFile(args, name, { optional });
+}
+
+function boundedTextFile(file, label, limit = MAX_INTELLIGENCE_INPUT_BYTES) {
+  const resolved = path.resolve(file);
+  let stat;
+  try { stat = fs.statSync(resolved); } catch { die(`Cannot read ${label}`); }
+  if (!stat.isFile() || stat.size > limit) die(`${label} exceeds ${limit} bytes or is not a file`);
+  const value = fs.readFileSync(resolved, "utf8");
+  if (Buffer.byteLength(value) > limit) die(`${label} exceeds ${limit} bytes`);
+  return value;
+}
+
+function boundedJsonPath(file, label, limit = MAX_INTELLIGENCE_INPUT_BYTES) {
+  try { return JSON.parse(boundedTextFile(file, label, limit)); } catch (error) {
+    if (error.exitCode) throw error;
+    die(`Invalid JSON in ${label}`);
+  }
+}
+
+function csvArgument(args, name, { optional = false } = {}) {
+  const value = args.values.get(name);
+  if (!value) {
+    if (optional) return [];
+    die(`Missing --${name}`);
+  }
+  const values = value.split(",").map((item) => item.trim()).filter(Boolean);
+  if (!values.length || values.length > 256 || new Set(values).size !== values.length) die(`--${name} must contain 1 to 256 unique comma-separated values`);
+  return values;
+}
+
+function writeJsonArtifact(args, report) {
+  const output = args.values.get("output");
+  if (output) {
+    const file = path.resolve(output);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const temporary = `${file}.tmp-${process.pid}`;
+    fs.writeFileSync(temporary, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+    fs.renameSync(temporary, file);
+  }
+  if (args.flags.has("json") || !output) console.log(JSON.stringify(report, null, 2));
+  else console.log(`Wrote ${report.schemaVersion ?? "artifact"}: ${output}`);
+}
+
+function handleProof(args) {
+  if (args.subcommand !== "mutate") die(`Unknown proof subcommand: ${args.subcommand ?? "none"}`);
+  const command = args.values.get("_command");
+  if (!Array.isArray(command) || !command.length) die("Proof mutation needs `-- <command> [args]`");
+  const report = runProofMutations({ repoDir: path.resolve(required(args, "repo")), plan: jsonFileArgument(args, "plan"), command });
+  writeJsonArtifact(args, report);
+  if (args.flags.has("gate") && report.status !== "ready") process.exitCode = 2;
+}
+
+function handleCapsule(args) {
+  if (args.subcommand === "capture") {
+    const command = args.values.get("_command");
+    if (!Array.isArray(command) || !command.length) die("Capsule capture needs `-- <command> [args]`");
+    writeJsonArtifact(args, captureEvidenceCapsule({
+      repoDir: path.resolve(required(args, "repo")),
+      inputPaths: csvArgument(args, "inputs"),
+      artifactPaths: csvArgument(args, "artifacts", { optional: true }),
+      command,
+      capturedAt: args.values.get("captured-at") ?? new Date().toISOString(),
+    }));
+    return;
+  }
+  const capsule = jsonFileArgument(args, "file");
+  if (args.subcommand === "verify") {
+    writeJsonArtifact(args, verifyEvidenceCapsule(capsule, { repoDir: args.values.has("repo") ? path.resolve(args.values.get("repo")) : undefined }));
+    return;
+  }
+  if (args.subcommand === "replay") {
+    const command = args.values.get("_command");
+    if (!Array.isArray(command) || !command.length) die("Capsule replay needs `-- <command> [args]`");
+    writeJsonArtifact(args, replayEvidenceCapsule(capsule, { repoDir: path.resolve(required(args, "repo")), command }));
+    return;
+  }
+  die(`Unknown capsule subcommand: ${args.subcommand ?? "none"}`);
+}
+
+function handleProvenance(args) {
+  if (args.subcommand === "create") {
+    const rootDir = path.resolve(args.values.get("root") ?? process.cwd());
+    const keyFile = args.values.get("private-key");
+    writeJsonArtifact(args, createProofProvenance({
+      rootDir,
+      subjects: csvArgument(args, "subjects"),
+      materials: jsonFileArgument(args, "materials", { optional: true }) ?? [],
+      builderId: required(args, "builder"),
+      invocation: jsonFileArgument(args, "invocation", { optional: true }) ?? {},
+      privateKey: keyFile ? boundedTextFile(keyFile, "private key", 64 * 1024) : undefined,
+    }));
+    return;
+  }
+  if (args.subcommand === "verify") {
+    const publicKeyFile = args.values.get("public-key");
+    writeJsonArtifact(args, verifyProofProvenance(jsonFileArgument(args, "file"), {
+      rootDir: args.values.has("root") ? path.resolve(args.values.get("root")) : undefined,
+      publicKey: publicKeyFile ? boundedTextFile(publicKeyFile, "public key", 64 * 1024) : undefined,
+      requireSignature: args.flags.has("require-signature"),
+    }));
+    return;
+  }
+  die(`Unknown provenance subcommand: ${args.subcommand ?? "none"}`);
+}
+
+function handleKernel(args) {
+  if (args.subcommand !== "compile") die(`Unknown kernel subcommand: ${args.subcommand ?? "none"}`);
+  writeJsonArtifact(args, compileCausalGraph(jsonFileArgument(args, "graph"), { cacheDir: path.resolve(required(args, "cache")) }));
+}
+
+function adapterOptions(args) {
+  const manifestFile = path.resolve(required(args, "manifest"));
+  return { manifest: jsonFileArgument(args, "manifest"), manifestDir: path.dirname(manifestFile) };
+}
+
+function handleAdapter(args) {
+  const options = adapterOptions(args);
+  if (args.subcommand === "inspect") {
+    writeJsonArtifact(args, inspectAdapter(options.manifest, { manifestDir: options.manifestDir }));
+    return;
+  }
+  const runOptions = {
+    ...options,
+    inputRoot: path.resolve(args.values.get("input-root") ?? options.manifestDir),
+    inputPaths: csvArgument(args, "inputs", { optional: true }),
+    environment: jsonFileArgument(args, "environment", { optional: true }) ?? {},
+  };
+  if (args.subcommand === "run") {
+    writeJsonArtifact(args, runAdapter({ ...runOptions, input: jsonFileArgument(args, "input") }));
+    return;
+  }
+  if (args.subcommand === "conform") {
+    writeJsonArtifact(args, conformAdapter(runOptions, jsonFileArgument(args, "cases")));
+    return;
+  }
+  die(`Unknown adapter subcommand: ${args.subcommand ?? "none"}`);
+}
+
+function handleHistory(args) {
+  if (args.subcommand !== "explain") die(`Unknown history subcommand: ${args.subcommand ?? "none"}`);
+  if (args.values.has("rollback-certificate")) {
+    writeJsonArtifact(args, explainRollbackHistory(boundedJsonPath(args.values.get("rollback-certificate"), "rollback certificate", CERTIFIED_CHANGESET_LIMITS.maxEnvelopeBytes), { repository: path.resolve(required(args, "repository")) }));
+    return;
+  }
+  writeJsonArtifact(args, explainMissionHistory(v2MissionDir(args), {
+    revision: args.values.has("revision") ? Number(args.values.get("revision")) : undefined,
+    requirementId: args.values.get("requirement"),
+  }));
+}
+
+function handleRollback(args) {
+  if (args.subcommand !== "prove") die(`Unknown rollback subcommand: ${args.subcommand ?? "none"}`);
+  const manifestFile = path.resolve(required(args, "manifest"));
+  const input = boundedJsonPath(manifestFile, "rollback manifest", CERTIFIED_CHANGESET_LIMITS.maxEnvelopeBytes);
+  if (!input || typeof input !== "object" || Array.isArray(input) || typeof input.repository !== "string" || !input.repository) die("Rollback manifest needs a repository path");
+  const repository = path.resolve(path.dirname(manifestFile), input.repository);
+  const result = proveRollbackEquivalence({
+    ...input,
+    repository,
+    producer: resolvedActor(args, repository),
+    outputPath: path.resolve(required(args, "output")),
+  });
+  printResult(result, args, (item) => `Rollback proof: ${item.status}; ${item.certificate.digest}`);
+  if (result.status !== "equivalent") process.exitCode = 4;
+}
+
+function handleReview(args) {
+  if (args.subcommand !== "compare") die(`Unknown review subcommand: ${args.subcommand ?? "none"}`);
+  const reviews = csvArgument(args, "reviews").map((file, index) => boundedJsonPath(file, `review[${index}]`));
+  const report = compileDifferentialReview(reviews);
+  writeJsonArtifact(args, report);
+  if (args.flags.has("gate") && report.status !== "ready") process.exitCode = 2;
 }
 
 function publicClaim(claim) {
@@ -1038,13 +1537,25 @@ function handleClose(args) {
 }
 
 function usage() {
-  return `Usage:\n  tugboat init --dir DIR --mission ID --title TITLE --owner NAME --source FILE --requirements-file FILE --target local|production --critical-path IDs --deploy-path PATH [--legacy]\n  tugboat status --dir DIR [--json]\n  tugboat next --dir DIR [--observed-at ISO] [--json]\n  tugboat claim --dir DIR --id ID --holder NAME --requirements IDs [--ttl-seconds 900] [--expected-revision N] [--expected-head SHA] [--json]\n  tugboat release --dir DIR --claim ID --holder NAME [--expected-revision N] [--expected-head SHA] [--json]\n  tugboat amend --dir DIR --id ID --requirements IDs --reason TEXT [--supersedes IDs] [--replacement-file FILE]\n  tugboat evidence --dir DIR --id ID --requirements IDs -- <command> [args]\n  tugboat evidence --dir DIR --kind operator|browser --id ID --requirements IDs --url URL --result TEXT [--viewport TEXT]\n  tugboat deployment --dir DIR --id ID --provider github-actions|aws-cloudformation --external-id ID --environment ENV --requirements IDs\n  tugboat checkpoint --dir DIR --requirements IDs --status STATUS --evidence-ids IDs --action TEXT --next TEXT\n  tugboat reconcile --dir DIR --issues CODES --reason TEXT [--allow-current-patch] [--accept-source-drift]\n  tugboat validate --dir DIR [--base REF] [--release] [--json]\n  tugboat ci --dir DIR [--base REF] [--json]\n  tugboat resume --dir DIR [--json]\n  tugboat close --dir DIR [--base REF]\n  tugboat language recommend --dir MISSION [--repo REPOSITORY] [--profile FILE] [--json]\n  tugboat bundle create --dir SOURCE_MISSION --id ID --output FILE --requirements IDS [--commits SHAS] [--components-file FILE] [--commit-requirements-file FILE] [--depends-on IDS] [--private-key FILE]\n  tugboat bundle inspect --file FILE [--public-key FILE] [--require-signature] [--json]\n  tugboat bundle compare --bundles FILES [--public-key FILE] [--require-signature] [--json]\n  tugboat cherry-pick --dir TARGET_MISSION --bundle FILE --requirements IDS [--exclude IDS] [--map SOURCE:TARGET] [--public-key FILE] [--require-signature] [--dry-run] -- COMMAND [ARGS]\n  tugboat migrate --legacy-dir DIR --dir NEW_DIR\n  tugboat backup --dir DIR [--destination DIR]\n  tugboat rebuild --dir DIR`;
+  return `Usage:\n  tugboat init --dir DIR --mission ID --title TITLE --owner NAME --source FILE --requirements-file FILE --target local|production --critical-path IDs --deploy-path PATH [--legacy]\n  tugboat status --dir DIR [--json]\n  tugboat next --dir DIR [--observed-at ISO] [--json]\n  tugboat claim --dir DIR --id ID --holder NAME --requirements IDs [--ttl-seconds 900] [--expected-revision N] [--expected-head SHA] [--json]\n  tugboat release --dir DIR --claim ID --holder NAME [--expected-revision N] [--expected-head SHA] [--json]\n  tugboat amend --dir DIR --id ID --requirements IDs --reason TEXT [--supersedes IDs] [--replacement-file FILE]\n  tugboat evidence --dir DIR --id ID --requirements IDs -- <command> [args]\n  tugboat evidence --dir DIR --kind operator|browser --id ID --requirements IDs --url URL --result TEXT [--viewport TEXT]\n  tugboat deployment --dir DIR --id ID --provider github-actions|aws-cloudformation --external-id ID --environment ENV --requirements IDs\n  tugboat checkpoint --dir DIR --requirements IDs --status STATUS --evidence-ids IDS --action TEXT --next TEXT\n  tugboat reconcile --dir DIR --issues CODES --reason TEXT [--allow-current-patch] [--accept-source-drift]\n  tugboat validate --dir DIR [--base REF] [--release] [--json]\n  tugboat ci --dir DIR [--base REF] [--json]\n  tugboat resume --dir DIR [--json]\n  tugboat close --dir DIR [--base REF]\n  tugboat boundary verify --file FILE [--root DIR] [--json]\n  tugboat language recommend --dir MISSION [--repo REPOSITORY] [--profile FILE] [--json]\n  tugboat bundle create --dir SOURCE_MISSION --id ID --output FILE --requirements IDS [--commits SHAS] [--components-file FILE] [--commit-requirements-file FILE] [--depends-on IDS] [--private-key FILE]\n  tugboat bundle inspect --file FILE [--public-key FILE] [--require-signature] [--json]\n  tugboat bundle compare --bundles FILES [--public-key FILE] [--require-signature] [--json]\n  tugboat bundle commute --candidates FILE [--json]\n  tugboat bundle compose --candidates FILE --dry-run [--json]\n  tugboat bundle certify --bundle FILE --boundary-manifest FILE --root DIR --output FILE [--generated-at ISO] [--public-key FILE] [--require-signature] [--json]\n  tugboat certificate verify --file FILE --bundle FILE --boundary-manifest FILE --root DIR [--public-key FILE] [--require-signature] [--json]\n  tugboat cherry-pick --dir TARGET_MISSION --bundle FILE --requirements IDS [--exclude IDS] [--map SOURCE:TARGET] [--public-key FILE] [--require-signature] [--dry-run] -- COMMAND [ARGS]\n  tugboat migrate --legacy-dir DIR --dir NEW_DIR\n  tugboat backup --dir DIR [--destination DIR]\n  tugboat rebuild --dir DIR\n  tugboat proof mutate --repo REPO --plan FILE [--output FILE] [--json] [--gate] -- COMMAND [ARGS]\n  tugboat capsule capture --repo REPO --inputs PATHS [--artifacts PATHS] [--captured-at ISO] [--output FILE] -- COMMAND [ARGS]\n  tugboat capsule verify --file FILE [--repo REPO] [--output FILE] [--json]\n  tugboat capsule replay --file FILE --repo REPO [--output FILE] -- COMMAND [ARGS]\n  tugboat provenance create --root DIR --subjects PATHS [--materials FILE] --builder ID [--invocation FILE] [--private-key FILE] [--output FILE]\n  tugboat provenance verify --file FILE [--root DIR] [--public-key FILE] [--require-signature] [--json]\n  tugboat kernel compile --graph FILE --cache DIR [--output FILE] [--json]\n  tugboat adapter inspect --manifest FILE [--json]\n  tugboat adapter run --manifest FILE --input FILE [--inputs PATHS] [--input-root DIR] [--environment FILE] [--output FILE]\n  tugboat adapter conform --manifest FILE --cases FILE [--inputs PATHS] [--input-root DIR] [--environment FILE] [--output FILE]\n  tugboat history explain --dir MISSION [--revision N] [--requirement ID] [--json]\n  tugboat review compare --reviews FILES [--json] [--gate]`;
+}
+
+function intelligenceUsage() {
+  return `Intelligence:\n  tugboat intelligence impact --dir MISSION --profile FILE [--repo REPOSITORY] [--base REF] [--head REF] [--json] [--gate]\n  tugboat intelligence lint|simulate|adversary --dir MISSION [--profile FILE] [--json] [--gate]\n  tugboat intelligence route --dir MISSION --workers FILE --profile FILE --observed-at ISO [--trust FILE] [--json] [--gate]\n  tugboat intelligence memory --records FILE --context FILE --observed-at ISO [--json] [--gate]\n  tugboat intelligence portfolio --dir MISSION --impact FILE --catalog FILE [--json] [--gate]\n  tugboat intelligence freshness --dir MISSION --policy FILE --observed-at ISO [--impact FILE] [--json] [--gate]\n  tugboat intelligence trust --graph FILE --policy FILE [--json] [--gate]\n  tugboat intelligence federation --manifest FILE [--json] [--gate]`;
+}
+
+function compositionUsage() {
+  return `Certified composition:\n  tugboat bundle compose --dir TARGET_MISSION --manifest FILE (--dry-run|--apply) [--public-key FILE] [--require-signature] [--composition-certificate FILE] [--merge-certificate FILE] [--json]\n  tugboat certificate verify-composition --file FILE [--repository REPOSITORY] [--json]\n  tugboat certificate verify-merge --file FILE --composition FILE [--repository REPOSITORY] [--json]\n  --repository is mandatory when the composition binds rollback admission evidence.`;
+}
+
+function rollbackUsage() {
+  return `Certified rollback:\n  tugboat rollback prove --manifest FILE --output FILE [--actor NAME] [--json]\n  tugboat certificate verify-rollback --file FILE --repository DIR [--json]\n  tugboat history explain --rollback-certificate FILE --repository DIR [--output FILE] [--json]`;
 }
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.command || args.flags.has("help")) {
-    console.log(usage());
+    console.log(`${usage()}\n${intelligenceUsage()}\n${compositionUsage()}\n${rollbackUsage()}`);
     return;
   }
   if (args.command === "init" && (args.flags.has("legacy") || args.values.get("protocol") === "1.1")) handleInit(args);
@@ -1069,11 +1580,24 @@ function main() {
   else if (args.command === "migrate") handleMigrate(args);
   else if (args.command === "backup") handleBackup(args);
   else if (args.command === "rebuild") handleRebuild(args);
+  else if (args.command === "boundary") handleBoundary(args);
+  else if (args.command === "certificate") handleCertificate(args);
   else if (args.command === "language" && args.subcommand === "recommend") handleLanguageRecommend(args);
   else if (args.command === "language") die(`Unknown language subcommand: ${args.subcommand ?? "none"}\n${usage()}`);
+  else if (args.command === "intelligence") handleIntelligence(args);
+  else if (args.command === "proof") handleProof(args);
+  else if (args.command === "capsule") handleCapsule(args);
+  else if (args.command === "provenance") handleProvenance(args);
+  else if (args.command === "kernel") handleKernel(args);
+  else if (args.command === "adapter") handleAdapter(args);
+  else if (args.command === "history") handleHistory(args);
+  else if (args.command === "rollback") handleRollback(args);
+  else if (args.command === "review") handleReview(args);
   else if (args.command === "bundle" && args.subcommand === "create") handleBundleCreate(args);
   else if (args.command === "bundle" && args.subcommand === "inspect") handleBundleInspect(args);
   else if (args.command === "bundle" && args.subcommand === "compare") handleBundleCompare(args);
+  else if (args.command === "bundle" && ["commute", "compose"].includes(args.subcommand)) handleBundleAlgebra(args);
+  else if (args.command === "bundle" && args.subcommand === "certify") handleBundleCertify(args);
   else if (args.command === "bundle") die(`Unknown bundle subcommand: ${args.subcommand ?? "none"}\n${usage()}`);
   else if (args.command === "cherry-pick") handleCherryPick(args);
   else die(`Unknown command: ${args.command}\n${usage()}`);
@@ -1083,8 +1607,16 @@ if (isMainModule(import.meta.url)) {
   try {
     main();
   } catch (error) {
-    console.error(error.message);
-    process.exit(error.exitCode ?? 1);
+    const exitCode = error.exitCode ?? 1;
+    if (process.argv.slice(2).includes("--json")) {
+      console.error(JSON.stringify({ error: error.name ?? "Error", message: error.message, exitCode, details: error.details ?? null }, null, 2));
+    } else {
+      console.error(error.message);
+      if (error.details?.counterexample) console.error(`Counterexample: ${JSON.stringify(error.details.counterexample)}`);
+      if (error.details?.cleanupFailures) console.error(`Cleanup recovery: ${error.details.cleanupFailures.join("; ")}`);
+      if (error.details?.recoveryRequired) console.error("Status: recovery_required");
+    }
+    process.exit(exitCode);
   }
 }
 

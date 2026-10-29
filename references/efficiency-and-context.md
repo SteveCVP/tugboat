@@ -47,6 +47,12 @@ Use the mission's recorded cadence:
 - `integration`: affected packages and cross-module contracts;
 - `release`: complete regression, preservation, deploy, and production proof.
 
+Compile change impact before choosing affected gates. Then use the proof portfolio to
+find the cheapest complete declared set; do not call its unexecuted plan evidence. Use
+freshness to avoid rerunning proof that is still valid and to force reruns when change,
+age, volatility, amendments, or deployed-SHA drift invalidates it. This is causal gate
+selection, not test-count minimization.
+
 After two materially identical failures, do not run the same command a third time.
 Classify the failure, inspect the smallest useful logs/state, record the diagnosis,
 and change the test, implementation, environment, or plan before retrying. A timeout
@@ -106,6 +112,9 @@ approved outcome, surface that conflict early and preserve an honest incomplete
 status; never silently narrow the task or lower the proof standard.
 
 - Favor deterministic scripts over repeated model judgment for structural checks.
+- Reuse decision memory only when context matches exactly, production outcomes agree,
+  and time-decayed assumptions remain live; stale precedent is more expensive than a
+  fresh decision.
 - Batch related source reads and independent tests.
 - Keep reviewer scopes precise; require findings and dispositions.
 - Make one source-reconciliation pass reusable across features.

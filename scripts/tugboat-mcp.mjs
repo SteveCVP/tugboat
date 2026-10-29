@@ -5,13 +5,28 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { compileImpactGraph, inspectTrackedChanges } from "./lib/causality-intelligence.mjs";
+import { inspectAdapter } from "./lib/adapter-sdk.mjs";
+import { verifyBoundaryManifest } from "./lib/boundary-manifest.mjs";
+import { verifyBundleEnvelope } from "./lib/bundle.mjs";
+import { compileBundleAlgebra } from "./lib/bundle-algebra.mjs";
 import { activeClaims, claimRequirements, compileExecutionPacket, releaseClaim } from "./lib/control-plane.mjs";
+import { compileDifferentialReview } from "./lib/differential-review.mjs";
+import { verifyEvidenceCapsule } from "./lib/evidence-capsule.mjs";
 import { gitSnapshot } from "./lib/evidence.mjs";
 import { isMainModule } from "./lib/entrypoint.mjs";
+import { explainMissionHistory } from "./lib/history-debugger.mjs";
 import { compileLanguageRecommendation, MAX_PROFILE_BYTES } from "./lib/language-optimizer.mjs";
+import { verifyBundleNonInterference } from "./lib/non-interference.mjs";
+import { compileEvidenceFreshness, compileProofPortfolio, compileReleaseSimulation } from "./lib/proof-intelligence.mjs";
+import { verifyProofProvenance } from "./lib/provenance.mjs";
+import { compileAdversarialAcceptance, compileAntiSlopReport } from "./lib/quality-intelligence.mjs";
 import { activeRequirementIds, missionReducer } from "./lib/reducer.mjs";
+import { compileExecutionRouting } from "./lib/routing-intelligence.mjs";
+import { verifyRollbackCertificate } from "./lib/rollback-equivalence.mjs";
 import { resolveActor } from "./lib/security.mjs";
 import { readState, replayEvents } from "./lib/store.mjs";
+import { compileTrustGraph } from "./lib/trust-intelligence.mjs";
 
 const MAX_FRAME_BYTES = 1024 * 1024;
 const RESOURCE_URI = "tugboat://mission/current";
@@ -116,6 +131,66 @@ function capabilities() {
 
 const READ_TOOLS = [
   {
+    name: "tugboat_adapter_inspect",
+    title: "Inspect a pinned adapter",
+    description: "Validate a bounded inline adapter manifest against an entrypoint under the fixed repository without executing it.",
+    inputSchema: { type: "object", required: ["manifest"], properties: { manifest: { type: "object" } }, additionalProperties: false },
+  },
+  {
+    name: "tugboat_boundary_verify",
+    title: "Verify a component boundary manifest",
+    description: "Verify a bounded inline boundary manifest and its declared source digests against the fixed repository without changing either.",
+    inputSchema: { type: "object", required: ["manifest"], properties: { manifest: { type: "object" }, verifySources: { type: "boolean", default: true } }, additionalProperties: false },
+  },
+  {
+    name: "tugboat_bundle_commute",
+    title: "Prove bundle commutativity",
+    description: "Compile a bounded, read-only pairwise and set-wise commutativity proof from semantically verified bundle witnesses; never applies or merges bundles.",
+    inputSchema: { type: "object", required: ["candidates"], properties: { candidates: { type: "array", minItems: 1, maxItems: 32, items: { type: "object" } }, proposedOrder: { type: "array", maxItems: 32, items: { type: "string" } } }, additionalProperties: false },
+  },
+  {
+    name: "tugboat_capsule_verify",
+    title: "Verify an evidence capsule",
+    description: "Verify a bounded inline evidence capsule and its declared inputs against the fixed repository without replaying commands.",
+    inputSchema: { type: "object", required: ["capsule"], properties: { capsule: { type: "object" }, verifyInputs: { type: "boolean", default: true } }, additionalProperties: false },
+  },
+  {
+    name: "tugboat_certificate_verify",
+    title: "Verify a certified changeset",
+    description: "Recompute a bounded inline non-interference witness from the exact inline bundle and boundary manifest against the fixed repository.",
+    inputSchema: { type: "object", required: ["witness", "bundle", "boundaryManifest"], properties: { witness: { type: "object" }, bundle: { type: "object" }, boundaryManifest: { type: "object" }, verifySources: { type: "boolean", default: true } }, additionalProperties: false },
+  },
+  {
+    name: "tugboat_history_explain",
+    title: "Explain mission history",
+    description: "Replay the fixed mission to an exact revision and explain the causal path for an optional requirement.",
+    inputSchema: { type: "object", properties: { revision: { type: "integer", minimum: 1 }, requirementId: { type: "string" } }, additionalProperties: false },
+  },
+  {
+    name: "tugboat_intelligence",
+    title: "Compile mission intelligence",
+    description: "Run one bounded, read-only intelligence compiler against the fixed mission and repository. Cross-mission memory and federation are intentionally CLI-only.",
+    inputSchema: {
+      type: "object",
+      required: ["operation"],
+      properties: {
+        operation: { type: "string", enum: ["adversary", "freshness", "impact", "lint", "portfolio", "route", "simulate", "trust"] },
+        profile: { type: "object", description: "Operation-specific profile, limited to 64 KiB." },
+        base: { type: "string" },
+        head: { type: "string" },
+        workers: { type: "object" },
+        observedAt: { type: "string", format: "date-time" },
+        trustReport: { type: "object" },
+        impact: { type: "object" },
+        adversarial: { type: "object" },
+        catalog: { type: "object" },
+        policy: { type: "object" },
+        graph: { type: "object" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: "tugboat_language_recommend",
     title: "Recommend implementation languages",
     description: "Compile an evidence-grounded one- or two-language architecture from the fixed mission and repository.",
@@ -129,6 +204,24 @@ const READ_TOOLS = [
       },
       additionalProperties: false,
     },
+  },
+  {
+    name: "tugboat_provenance_verify",
+    title: "Verify proof provenance",
+    description: "Verify a bounded inline in-toto/SLSA DSSE envelope against subjects under the fixed repository; never signs or reads private keys.",
+    inputSchema: { type: "object", required: ["envelope"], properties: { envelope: { type: "object" }, publicKey: { type: "string" }, requireSignature: { type: "boolean", default: false }, verifySubjects: { type: "boolean", default: true } }, additionalProperties: false },
+  },
+  {
+    name: "tugboat_review_compare",
+    title: "Compare agent reviews",
+    description: "Compare bounded inline structured reviews without treating reviewer agreement as proof.",
+    inputSchema: { type: "object", required: ["reviews"], properties: { reviews: { type: "array", minItems: 2, maxItems: 32, items: { type: "object" } } }, additionalProperties: false },
+  },
+  {
+    name: "tugboat_rollback_verify",
+    title: "Verify rollback equivalence",
+    description: "Repository-backed verification only: validate a bounded rollback-equivalence certificate against exact local Git objects and the verified boundary. This tool never executes rollback operations or changes a repository.",
+    inputSchema: { type: "object", required: ["certificate"], properties: { certificate: { type: "object" } }, additionalProperties: false },
   },
   {
     name: "tugboat_next",
@@ -230,6 +323,69 @@ function languageRecommendation(dir, repo, profile = {}) {
   return compileLanguageRecommendation(loadState(dir), { profile, repoDir: repo });
 }
 
+const MISSION_INTELLIGENCE_OPERATIONS = new Set([
+  "adversary",
+  "freshness",
+  "impact",
+  "lint",
+  "portfolio",
+  "route",
+  "simulate",
+  "trust",
+]);
+
+const INTELLIGENCE_ARGUMENTS = Object.freeze({
+  adversary: ["operation", "profile"],
+  freshness: ["operation", "policy", "observedAt", "impact"],
+  impact: ["operation", "profile", "base", "head"],
+  lint: ["operation", "profile"],
+  portfolio: ["operation", "impact", "catalog"],
+  route: ["operation", "profile", "workers", "observedAt", "trustReport"],
+  simulate: ["operation", "profile", "impact", "adversarial"],
+  trust: ["operation", "graph", "policy"],
+});
+
+function boundedIntelligenceProfile(value) {
+  const profile = assertObject(value, "profile");
+  if (Buffer.byteLength(JSON.stringify(profile)) > MAX_PROFILE_BYTES) throw new Error("profile exceeds 64 KiB");
+  return profile;
+}
+
+function intelligenceReport(dir, repo, input) {
+  const preliminary = assertObject(input, "Tool arguments");
+  const operation = stringArg(preliminary, "operation");
+  if (!MISSION_INTELLIGENCE_OPERATIONS.has(operation)) throw new Error(`Unknown mission-local intelligence operation: ${operation}`);
+  const args = exactArguments(preliminary, INTELLIGENCE_ARGUMENTS[operation], ["operation"]);
+  const state = loadState(dir);
+  const profile = args.profile === undefined ? {} : boundedIntelligenceProfile(args.profile);
+
+  if (operation === "impact") {
+    const base = args.base ?? state.metadata.baselineGitSha;
+    const head = args.head ?? "HEAD";
+    return compileImpactGraph(state, inspectTrackedChanges(repo, base, head).changes, profile);
+  }
+  if (operation === "lint") return compileAntiSlopReport(state, profile);
+  if (operation === "simulate") return compileReleaseSimulation(state, profile, args.impact, args.adversarial);
+  if (operation === "route") {
+    if (args.workers === undefined) throw new Error("Missing argument(s): workers");
+    if (args.observedAt === undefined) throw new Error("Missing argument(s): observedAt");
+    return compileExecutionRouting(state, args.workers, profile, args.observedAt, args.trustReport);
+  }
+  if (operation === "portfolio") {
+    if (args.impact === undefined || args.catalog === undefined) throw new Error("Missing argument(s): impact, catalog");
+    return compileProofPortfolio(state, args.impact, args.catalog);
+  }
+  if (operation === "freshness") {
+    if (args.policy === undefined || args.observedAt === undefined) throw new Error("Missing argument(s): policy, observedAt");
+    return compileEvidenceFreshness(state, args.policy, args.observedAt, args.impact);
+  }
+  if (operation === "trust") {
+    if (args.graph === undefined || args.policy === undefined) throw new Error("Missing argument(s): graph, policy");
+    return compileTrustGraph(args.graph, args.policy);
+  }
+  return compileAdversarialAcceptance(state, profile);
+}
+
 function toolSuccess(text, structuredContent) {
   return { content: [{ type: "text", text }], structuredContent };
 }
@@ -242,6 +398,75 @@ function callTool({ dir, repo, allowWrites, actor }, params) {
   const call = assertObject(params, "tools/call params");
   if (typeof call.name !== "string") throw new RpcError(-32602, "tools/call requires a tool name");
   try {
+    if (call.name === "tugboat_adapter_inspect") {
+      const args = exactArguments(call.arguments, ["manifest"], ["manifest"]);
+      const result = inspectAdapter(assertObject(args.manifest, "manifest"), { manifestDir: repo });
+      return toolSuccess(`Adapter ${result.adapter.id}: ${result.status}; ${result.limitations[0]}`, result);
+    }
+    if (call.name === "tugboat_boundary_verify") {
+      const args = exactArguments(call.arguments, ["manifest", "verifySources"], ["manifest"]);
+      if (args.verifySources !== undefined && typeof args.verifySources !== "boolean") throw new Error("verifySources must be a boolean");
+      const result = verifyBoundaryManifest(assertObject(args.manifest, "manifest"), { rootDir: args.verifySources === false ? undefined : repo });
+      return toolSuccess(`Boundary manifest ${result.id}: ${result.status}; ${result.componentCount} components; digest ${result.digest}`, result);
+    }
+    if (call.name === "tugboat_bundle_commute") {
+      const args = exactArguments(call.arguments, ["candidates", "proposedOrder"], ["candidates"]);
+      if (!Array.isArray(args.candidates)) throw new Error("candidates must be an array");
+      if (args.proposedOrder !== undefined && !Array.isArray(args.proposedOrder)) throw new Error("proposedOrder must be an array");
+      const result = compileBundleAlgebra({ candidates: args.candidates, proposedOrder: args.proposedOrder });
+      return toolSuccess(`Bundle algebra: ${result.verdict}; order ${result.canonicalOrder.join(" -> ")}; hazards ${result.hazards.length}; execution authorized: no`, result);
+    }
+    if (call.name === "tugboat_capsule_verify") {
+      const args = exactArguments(call.arguments, ["capsule", "verifyInputs"], ["capsule"]);
+      if (args.verifyInputs !== undefined && typeof args.verifyInputs !== "boolean") throw new Error("verifyInputs must be a boolean");
+      const result = verifyEvidenceCapsule(assertObject(args.capsule, "capsule"), { repoDir: args.verifyInputs === false ? undefined : repo });
+      return toolSuccess(`Capsule: ${result.status}; digest ${result.capsuleDigest}`, result);
+    }
+    if (call.name === "tugboat_certificate_verify") {
+      const args = exactArguments(call.arguments, ["witness", "bundle", "boundaryManifest", "verifySources"], ["witness", "bundle", "boundaryManifest"]);
+      if (args.verifySources !== undefined && typeof args.verifySources !== "boolean") throw new Error("verifySources must be a boolean");
+      const bundle = verifyBundleEnvelope(assertObject(args.bundle, "bundle"));
+      const result = verifyBundleNonInterference(assertObject(args.witness, "witness"), {
+        bundle,
+        boundary: assertObject(args.boundaryManifest, "boundaryManifest"),
+        rootDir: args.verifySources === false ? undefined : repo,
+      });
+      return toolSuccess(`Certified changeset ${result.bundleId}: ${result.verdict}; digest ${result.digest}`, result);
+    }
+    if (call.name === "tugboat_history_explain") {
+      const args = exactArguments(call.arguments, ["revision", "requirementId"]);
+      if (args.revision !== undefined && (!Number.isInteger(args.revision) || args.revision < 1)) throw new Error("revision must be a positive integer");
+      if (args.requirementId !== undefined) stringArg(args, "requirementId");
+      const result = explainMissionHistory(dir, { revision: args.revision, requirementId: args.requirementId });
+      return toolSuccess(`Mission ${result.mission} at revision ${result.selected.revision}; digest ${result.digest}`, result);
+    }
+    if (call.name === "tugboat_provenance_verify") {
+      const args = exactArguments(call.arguments, ["envelope", "publicKey", "requireSignature", "verifySubjects"], ["envelope"]);
+      if (args.publicKey !== undefined) stringArg(args, "publicKey");
+      if (args.requireSignature !== undefined && typeof args.requireSignature !== "boolean") throw new Error("requireSignature must be a boolean");
+      if (args.verifySubjects !== undefined && typeof args.verifySubjects !== "boolean") throw new Error("verifySubjects must be a boolean");
+      const result = verifyProofProvenance(assertObject(args.envelope, "envelope"), {
+        rootDir: args.verifySubjects === false ? undefined : repo,
+        publicKey: args.publicKey,
+        requireSignature: args.requireSignature === true,
+      });
+      return toolSuccess(`Provenance: ${result.status}; signatureVerified=${result.signatureVerified}`, result);
+    }
+    if (call.name === "tugboat_review_compare") {
+      const args = exactArguments(call.arguments, ["reviews"], ["reviews"]);
+      if (!Array.isArray(args.reviews)) throw new Error("reviews must be an array");
+      const result = compileDifferentialReview(args.reviews);
+      return toolSuccess(`Differential review: ${result.status}; consensus is not proof; digest ${result.digest}`, result);
+    }
+    if (call.name === "tugboat_rollback_verify") {
+      const args = exactArguments(call.arguments, ["certificate"], ["certificate"]);
+      const result = verifyRollbackCertificate(assertObject(args.certificate, "certificate"), { repository: repo });
+      return toolSuccess(`Rollback certificate: ${result.status}; digest ${result.digest}; execution authorized: no`, result);
+    }
+    if (call.name === "tugboat_intelligence") {
+      const result = intelligenceReport(dir, repo, call.arguments);
+      return toolSuccess(`${call.arguments.operation}: ${result.status}; digest ${result.digest}`, result);
+    }
     if (call.name === "tugboat_language_recommend") {
       const args = exactArguments(call.arguments, ["profile"]);
       const profile = assertObject(args.profile, "profile");

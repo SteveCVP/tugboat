@@ -32,6 +32,25 @@ export function redactSecrets(value) {
 
 export function assertNoSecrets(value, label = "value") {
   const findings = scanSecrets(typeof value === "string" ? value : JSON.stringify(value));
+  const seen = new Set();
+  function visit(item) {
+    if (typeof item === "string") {
+      findings.push(...scanSecrets(item));
+      return;
+    }
+    if (Buffer.isBuffer(item)) {
+      if (isTextBuffer(item)) findings.push(...scanSecrets(item.toString("utf8")));
+      return;
+    }
+    if (!item || typeof item !== "object" || seen.has(item)) return;
+    seen.add(item);
+    if (Array.isArray(item)) item.forEach(visit);
+    else for (const [key, child] of Object.entries(item)) {
+      findings.push(...scanSecrets(key));
+      visit(child);
+    }
+  }
+  if (typeof value !== "string") visit(value);
   if (findings.length) {
     const kinds = [...new Set(findings.map((finding) => finding.kind))].join(", ");
     throw new Error(`${label} contains secret material (${kinds}); store a redacted reference instead`);

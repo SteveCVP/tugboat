@@ -34,7 +34,7 @@ function walk(root, current = root) {
 
 function copyPublicSource() {
   const destination = temporaryDestination("source");
-  const ignored = new Set([".git", ".superpowers", ".worktrees", "docs", "tugboat", "tugboat-external-release"]);
+  const ignored = new Set([".git", ".superpowers", ".worktrees", "tugboat", "tugboat-external-release"]);
   fs.cpSync(ROOT, destination, {
     recursive: true,
     filter(source) {
@@ -83,7 +83,25 @@ function proveExportedControlPlane(runtimeRoot) {
   assert.equal(handshake.status, 0, handshake.stderr);
   const discovery = JSON.parse(handshake.stdout).result;
   assert.equal(discovery.protocolVersion, "2026-07-28");
-  assert.deepEqual(discovery.tools.map((tool) => tool.name), ["tugboat_language_recommend", "tugboat_next", "tugboat_status"]);
+  assert.deepEqual(discovery.tools.map((tool) => tool.name), ["tugboat_adapter_inspect", "tugboat_boundary_verify", "tugboat_bundle_commute", "tugboat_capsule_verify", "tugboat_certificate_verify", "tugboat_history_explain", "tugboat_intelligence", "tugboat_language_recommend", "tugboat_next", "tugboat_provenance_verify", "tugboat_review_compare", "tugboat_rollback_verify", "tugboat_status"]);
+
+  fs.writeFileSync(path.join(project, "operator.ts"), "export const operator = 2;\n");
+  run("git", ["add", "operator.ts"], project);
+  run("git", ["commit", "-m", "change operator"], project);
+  const impactProfile = path.join(project, "impact.json");
+  fs.writeFileSync(impactProfile, JSON.stringify({ rules: [{ id: "operator", pattern: "operator.ts", requirementIds: ["R1"], evidenceIds: [], tests: ["node --test"], risks: ["runtime"] }] }));
+  const impactArgs = ["intelligence", "impact", "--dir", missionDir, "--repo", project, "--base", packet.observation.git.head, "--head", "HEAD", "--profile", impactProfile, "--json"];
+  const exportedImpact = JSON.parse(run(process.execPath, [cli, ...impactArgs], project).stdout);
+  const sourceImpact = JSON.parse(run(process.execPath, [path.join(ROOT, "scripts", "tugboat.mjs"), ...impactArgs], project).stdout);
+  assert.equal(exportedImpact.digest, sourceImpact.digest);
+  assert.equal(exportedImpact.schemaVersion, "tugboat.proof-impact.v1");
+
+  const graph = path.join(project, "trust-graph.json");
+  const policy = path.join(project, "trust-policy.json");
+  fs.writeFileSync(graph, JSON.stringify({ nodes: [{ id: "source", type: "artifact", classification: "internal", authorities: ["read"] }], edges: [] }));
+  fs.writeFileSync(policy, JSON.stringify({ classifications: ["public", "internal"], sinks: [{ nodeId: "source", maxClassification: "internal", allowedAuthorities: ["read"] }], approvedSanitizers: [] }));
+  const trust = JSON.parse(run(process.execPath, [cli, "intelligence", "trust", "--graph", graph, "--policy", policy, "--json"], project).stdout);
+  assert.equal(trust.status, "ready");
 }
 
 test("exports a neutral freestanding repository from the public allowlist", () => {
@@ -93,7 +111,7 @@ test("exports a neutral freestanding repository from the public allowlist", () =
 
   assert.equal(result.destinationDir, fs.realpathSync(destination));
   assert.equal(result.packageName, "tugboat-mission-control");
-  assert.equal(result.version, "2.3.0");
+  assert.equal(result.version, "4.0.0");
   assert.equal(packageJson.name, "tugboat-mission-control");
   assert.equal(packageJson.private, false);
   assert.equal(packageJson.license, "MIT");
@@ -101,9 +119,10 @@ test("exports a neutral freestanding repository from the public allowlist", () =
   assert.ok(fs.existsSync(path.join(destination, "CONTRIBUTING.md")));
   assert.ok(fs.existsSync(path.join(destination, "SECURITY.md")));
   assert.ok(fs.existsSync(path.join(destination, ".github", "workflows", "ci.yml")));
+  assert.ok(fs.existsSync(path.join(destination, "docs", "release-audit-4.0.0.md")));
   assert.equal(fs.existsSync(path.join(destination, "tugboat")), false);
   assert.equal(fs.existsSync(path.join(destination, "tugboat-external-release")), false);
-  assert.equal(fs.existsSync(path.join(destination, "docs")), false);
+  assert.deepEqual(fs.readdirSync(path.join(destination, "docs")), ["release-audit-4.0.0.md"]);
   assert.equal(fs.existsSync(path.join(destination, ".git")), false);
 
   const ci = fs.readFileSync(path.join(destination, ".github", "workflows", "ci.yml"), "utf8");
@@ -111,6 +130,7 @@ test("exports a neutral freestanding repository from the public allowlist", () =
   const dependabot = fs.readFileSync(path.join(destination, ".github", "dependabot.yml"), "utf8");
   assert.match(ci, /permissions:\n  contents: read/);
   assert.match(ci, /persist-credentials: false/);
+  assert.match(ci, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
   assert.doesNotMatch(ci, /uses:\s+[^\s]+@v\d/);
   assert.match(codeql, /security-events: write/);
   assert.match(codeql, /schedule:/);
@@ -236,12 +256,13 @@ test("generated repository tests, packages, and installs independently", { skip:
   assert.equal(packed.name, "tugboat-mission-control");
   const packedFiles = new Set(packed.files.map((entry) => entry.path));
   for (const required of ["LICENSE", "SKILL.md", "evals/evals.json", "scripts/tugboat.mjs", "scripts/tugboat-mcp.mjs"]) assert.ok(packedFiles.has(required), required);
-  assert.ok([...packedFiles].every((file) => !file.startsWith("docs/") && !file.startsWith("tugboat/")));
+  assert.ok(packedFiles.has("docs/release-audit-4.0.0.md"));
+  assert.ok([...packedFiles].every((file) => !file.startsWith("tugboat/")));
 
   const home = temporaryDestination("home");
   fs.mkdirSync(home);
   const installed = JSON.parse(run(process.execPath, ["scripts/install.mjs", "--source", destination, "--home", home, "--targets", "agents,claude,codex", "--json"], destination).stdout);
-  assert.equal(installed.version, "2.3.0");
+  assert.equal(installed.version, "4.0.0");
   assert.equal(installed.installed.length, 3);
   for (const relative of [[".agents"], [".claude"], [".codex"]]) {
     const runtime = path.join(home, ...relative, "skills", "tugboat");

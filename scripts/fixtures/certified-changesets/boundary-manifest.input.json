@@ -1,0 +1,115 @@
+{
+  "id": "manifest:example-platform",
+  "generatedAt": "2026-10-29T15:00:00.000Z",
+  "disclosure": "confidential",
+  "sources": [
+    {
+      "id": "source:architecture",
+      "path": "docs/architecture.md",
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "disclosure": "confidential"
+    }
+  ],
+  "components": [
+    {
+      "id": "component:core",
+      "owner": "team:platform",
+      "disclosure": "confidential",
+      "paths": [
+        "src/core/**"
+      ],
+      "requirementIds": [
+        "R1"
+      ],
+      "dependencies": [],
+      "interfaces": [
+        {
+          "id": "interface:core-typescript",
+          "kind": "typescript",
+          "path": "src/core/index.mjs",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "disclosure": "internal"
+        }
+      ],
+      "invariantIds": [
+        "invariant:core-export-stable"
+      ],
+      "gateIds": [
+        "gate:core-tests"
+      ]
+    },
+    {
+      "id": "component:api",
+      "owner": "team:api",
+      "disclosure": "confidential",
+      "paths": [
+        "src/api/**"
+      ],
+      "requirementIds": [
+        "R2"
+      ],
+      "dependencies": [
+        "component:core"
+      ],
+      "interfaces": [
+        {
+          "id": "interface:public-openapi",
+          "kind": "openapi",
+          "path": "src/api/openapi.json",
+          "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "disclosure": "public"
+        }
+      ],
+      "invariantIds": [
+        "invariant:public-api-compatible"
+      ],
+      "gateIds": [
+        "gate:api-compat"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "invariant:core-export-stable",
+      "kind": "api_compatibility",
+      "description": "The core exported TypeScript surface remains compatible.",
+      "subjectIds": [
+        "interface:core-typescript"
+      ],
+      "gateIds": [
+        "gate:core-tests"
+      ]
+    },
+    {
+      "id": "invariant:public-api-compatible",
+      "kind": "api_compatibility",
+      "description": "The public OpenAPI contract remains backwards compatible.",
+      "subjectIds": [
+        "interface:public-openapi"
+      ],
+      "gateIds": [
+        "gate:api-compat"
+      ]
+    }
+  ],
+  "gates": [
+    {
+      "id": "gate:core-tests",
+      "kind": "test",
+      "description": "Run the core compatibility suite.",
+      "subjectIds": [
+        "component:core"
+      ],
+      "mandatory": false
+    },
+    {
+      "id": "gate:api-compat",
+      "kind": "compatibility",
+      "description": "Verify the public API contract.",
+      "subjectIds": [
+        "interface:public-openapi"
+      ],
+      "mandatory": true
+    }
+  ]
+}

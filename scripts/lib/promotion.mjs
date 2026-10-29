@@ -6,6 +6,7 @@ import path from "node:path";
 import { readBundle, trackedContentDigest } from "./bundle.mjs";
 import { sha256 } from "./canonical.mjs";
 import { missionReducer } from "./reducer.mjs";
+import { validateNonInterferencePreservation } from "./proof-invalidation.mjs";
 import { renderMission } from "./render.mjs";
 import { appendEvent, readState } from "./store.mjs";
 
@@ -174,6 +175,9 @@ function planFromVerified(options, verified, state, repo, missionRelative) {
     evidenceRefs: [...state.requirements[id].evidenceRefs],
     result: state.requirements[id].result,
   }));
+  const preservationProofs = options.preservationProofs ?? [];
+  if (!Array.isArray(preservationProofs) || preservationProofs.length > 32) fail("Promotion preservationProofs must be an array of at most 32 records");
+  const verifiedPreservationProofs = preservationProofs.map((item) => validateNonInterferencePreservation(item, { bundleDigest: verified.digest }));
   return {
     valid: conflicts.length === 0,
     bundleId: payload.id,
@@ -188,6 +192,7 @@ function planFromVerified(options, verified, state, repo, missionRelative) {
     commits: selection.commits.map(({ patchIndex: _ignored, ...item }) => ({ sourceSha: item.sha, requirementIds: item.requirementIds, subject: item.subject })),
     components: selection.components.map(({ componentIndex: _ignored, content: _body, ...item }) => item),
     proofInvalidations,
+    preservationProofs: verifiedPreservationProofs,
     conflicts,
   };
 }
@@ -317,6 +322,7 @@ export function promoteBundle(options) {
       ...disposition,
       validation,
       targetContentDigest,
+      preservationProofs: plan.preservationProofs,
       sliceProgressionVersion: 1,
     };
     const promoted = appendEvent(temporaryMission, {
@@ -343,6 +349,7 @@ export function promoteBundle(options) {
       validation,
       reusableEvidence: disposition.reusableEvidence,
       expiredEvidence: disposition.expiredEvidence,
+      preservationProofs: plan.preservationProofs,
     };
   } catch (error) {
     if (error instanceof PromotionError) throw error;

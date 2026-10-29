@@ -1,0 +1,48 @@
+{
+  "id": "certificate:confined-candidate",
+  "generatedAt": "2026-10-29T14:00:00.000Z",
+  "verdict": "ready",
+  "subjects": [
+    {
+      "kind": "bundle",
+      "id": "bundle:confined-candidate",
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "inputs": [
+    {
+      "kind": "boundary_manifest",
+      "id": "manifest:example",
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "kind": "policy",
+      "id": "policy:default",
+      "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "producer": {
+    "name": "Codex",
+    "kind": "agent",
+    "runtime": "codex"
+  },
+  "claims": [
+    {
+      "id": "claim:confined-to-core",
+      "type": "non_interference",
+      "status": "passed",
+      "subjectIds": [
+        "bundle:confined-candidate",
+        "component:core"
+      ],
+      "summary": "All declared writes remain inside component:core."
+    }
+  ],
+  "counterexamples": [],
+  "body": {
+    "boundaryIds": [
+      "component:core"
+    ],
+    "note": "Semantic validation belongs to the format-specific compiler."
+  }
+}

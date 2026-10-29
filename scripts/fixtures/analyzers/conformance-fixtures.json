@@ -1,0 +1,80 @@
+{
+  "typescript": {
+    "path": "src/public.ts",
+    "safe": {
+      "before": "export function keep(value: string): string { return value; }\n",
+      "after": "export function keep(value: string): string { return value; }\nexport const added = 1;\n"
+    },
+    "breaking": {
+      "before": "export function keep(value: string): string { return value; }\nexport const stable = 1;\n",
+      "after": "export const stable = 1;\n"
+    },
+    "malformed": "export function broken(value: string { return value; }\n",
+    "unsupported": "export * from \"./dynamic.js\";\n"
+  },
+  "python": {
+    "path": "src/public.py",
+    "safe": {
+      "before": "def keep(value):\n    return value\n",
+      "after": "def keep(value):\n    return value\n\ndef added():\n    return 1\n"
+    },
+    "breaking": {
+      "before": "def keep(value):\n    return value\n\ndef stable():\n    return 1\n",
+      "after": "def stable():\n    return 1\n"
+    },
+    "malformed": "def broken(:\n    return 1\n",
+    "unsupported": "from dynamic_module import *\n"
+  },
+  "go": {
+    "path": "pkg/public.go",
+    "safe": {
+      "before": "package public\nfunc Keep(value string) string { return value }\n",
+      "after": "package public\nfunc Keep(value string) string { return value }\ntype Added struct { Value string }\n"
+    },
+    "breaking": {
+      "before": "package public\nfunc Keep(value string) string { return value }\ntype Stable struct { Value string }\n",
+      "after": "package public\ntype Stable struct { Value string }\n"
+    },
+    "malformed": "package public\nfunc Broken(value string { return value }\n",
+    "unsupported": "package public\nimport \"C\"\nfunc Keep() {}\n"
+  },
+  "openapi": {
+    "path": "api/openapi.json",
+    "safe": {
+      "before": "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"Example\",\"version\":\"1\"},\"paths\":{\"/keep\":{\"get\":{\"operationId\":\"keep\",\"responses\":{\"200\":{\"description\":\"ok\"}}}}}}",
+      "after": "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"Example\",\"version\":\"1\"},\"paths\":{\"/keep\":{\"get\":{\"operationId\":\"keep\",\"responses\":{\"200\":{\"description\":\"ok\"}}}},\"/added\":{\"get\":{\"operationId\":\"added\",\"responses\":{\"200\":{\"description\":\"ok\"}}}}}}"
+    },
+    "breaking": {
+      "before": "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"Example\",\"version\":\"1\"},\"paths\":{\"/keep\":{\"get\":{\"operationId\":\"keep\",\"responses\":{\"200\":{\"description\":\"ok\"}}}}}}",
+      "after": "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"Example\",\"version\":\"1\"},\"paths\":{}}"
+    },
+    "malformed": "{\"openapi\":\"3.1.0\",",
+    "unsupported": "openapi: 3.1.0\npaths: {}\n"
+  },
+  "graphql": {
+    "path": "api/schema.graphql",
+    "safe": {
+      "before": "type Query { keep: String }\n",
+      "after": "type Query { keep: String added: Int }\n"
+    },
+    "breaking": {
+      "before": "type Query { keep: String stable: Int }\n",
+      "after": "type Query { stable: Int }\n"
+    },
+    "malformed": "type Query { keep: String\n",
+    "unsupported": "directive @auth on FIELD_DEFINITION\ntype Query { keep: String }\n"
+  },
+  "sql": {
+    "path": "db/schema.sql",
+    "safe": {
+      "before": "CREATE TABLE users (id INTEGER, name TEXT);\n",
+      "after": "CREATE TABLE users (id INTEGER, name TEXT, email TEXT);\n"
+    },
+    "breaking": {
+      "before": "CREATE TABLE users (id INTEGER, name TEXT);\n",
+      "after": "CREATE TABLE users (id INTEGER);\n"
+    },
+    "malformed": "CREATE TABLE broken (id INTEGER;\n",
+    "unsupported": "DO $$ BEGIN PERFORM dangerous(); END $$;\n"
+  }
+}
