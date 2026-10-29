@@ -7,7 +7,8 @@
 - `starter-prompts.md`: concise prompts for new, resumed, deadline-bound, and Sasha-paired missions.
 - `docs/release-audit-4.0.0.md`: public capability, security, portability, and verification inventory for the 4.0 release.
 - `docs/release-audit-4.1.0.md`: exact certified-changeset scope, limits, and verification inventory for the 4.1 feature release.
-- `docs/release-audit-4.1.1.md`: exact compatibility fix and verification inventory for the current patch release.
+- `docs/release-audit-4.1.1.md`: exact compatibility fix and verification inventory for the 4.1.1 patch release.
+- `docs/release-audit-4.2.0.md`: read-only doctor contract, failure guidance, and verification inventory for the current feature release.
 
 ## References
 
@@ -24,9 +25,10 @@
 ## Deterministic Tools
 
 - `package.json`: Node 20+ package and portable `tugboat` and `tugboat-mcp` binaries.
-- `scripts/tugboat.mjs`: protocol 2 mission, language architecture, ten mission-intelligence compilers, seven proof-runtime workflows, compiled execution packets, expiring claims, evidence, scope, continuity, bundle, selective-promotion, CI, migration, recovery, and close commands with 1.1 compatibility.
+- `scripts/tugboat.mjs`: protocol 2 mission, installation and mission diagnostics, language architecture, ten mission-intelligence compilers, seven proof-runtime workflows, compiled execution packets, expiring claims, evidence, scope, continuity, bundle, selective-promotion, CI, migration, recovery, and close commands with 1.1 compatibility.
 - `scripts/tugboat-mcp.mjs`: bounded dependency-free MCP stdio adapter with read-only default, fixed mission and repository scope, deterministic discovery, proof verification and comparison, structured tools, and packet resources.
 - `scripts/lib/control-plane.mjs`: canonical execution-packet compilation and atomic claim/release mutation layer shared by CLI and MCP.
+- `scripts/lib/doctor.mjs`: read-only runtime, installed-payload, mission-protocol, replay, snapshot, and lock diagnostics.
 - `scripts/lib/language-catalog.mjs`: versioned, source-auditable ordinal capability catalog.
 - `scripts/lib/language-optimizer.mjs`: deterministic ledger signals, private-safe repository facts, language ranking, decision grades, and costed topology selection shared by CLI and MCP.
 - `scripts/lib/intelligence-core.mjs`: bounded validation, replay-verified mission reads, portable globs, canonical reports, and secret/path rejection shared by every intelligence compiler.

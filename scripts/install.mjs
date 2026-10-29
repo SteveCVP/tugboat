@@ -27,7 +27,7 @@ function walk(root, current = root) {
   return files;
 }
 
-function payloadDigest(stage) {
+export function payloadDigest(stage) {
   const proof = walk(stage).filter((file) => file !== ".tugboat-install.json").map((file) => `${file}:${sha256(fs.readFileSync(path.join(stage, file)))}`).join("\n");
   return `sha256:${sha256(proof)}`;
 }

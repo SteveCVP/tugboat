@@ -1,19 +1,19 @@
 # Tugboat
 
-**Current release: 4.1.1**
+**Current release: 4.2.0**
 
 Tugboat is portable mission control for consequential software builds. It turns an
 approved requirement ledger into bounded work, durable evidence, and release decisions
 that Claude Code, Codex, a developer shell, and CI can verify the same way. The runtime
 is dependency-free Node 20+ and keeps proof separate from generation.
 
-The 4.1 release adds owned boundaries, deterministic effect analysis,
-non-interference witnesses, multi-candidate composition, merge certificates, and
-repository-backed rollback equivalence. Patch 4.1.1 also detects protocol 1.1 missions
-before `status` or `next`, returns explicit migration guidance, and leaves the legacy
-mission unchanged. See the [4.1.1 release audit](docs/release-audit-4.1.1.md) for the
-exact patch contract and the [4.1.0 release audit](docs/release-audit-4.1.0.md) for the
-underlying capability and security boundaries.
+The 4.2 release adds `tugboat doctor`, a read-only preflight for the Node runtime,
+installed payload integrity, mission protocol, event replay, snapshot consistency, and
+mission locks. It returns a scan-friendly verdict for people and stable JSON for CI,
+with explicit repair guidance when attention is required. See the
+[4.2.0 release audit](docs/release-audit-4.2.0.md) for the exact contract and proof.
+The [4.1.1 release audit](docs/release-audit-4.1.1.md) preserves the preceding legacy-
+mission compatibility history.
 
 ## Quick start
 
@@ -22,6 +22,7 @@ git clone REPOSITORY_URL tugboat
 cd tugboat
 npm test
 node scripts/install.mjs --source "$PWD" --targets agents,claude,codex
+node scripts/tugboat.mjs doctor
 node scripts/tugboat.mjs --help
 ```
 
@@ -258,6 +259,17 @@ node scripts/install.mjs --source "$PWD" --targets agents,claude,codex
 ```
 
 This installs the identical version into `~/.agents/skills/tugboat`, `~/.claude/skills/tugboat`, and `~/.codex/skills/tugboat`. Existing installs are moved to timestamped backups. CI can use the package binary directly.
+
+Check the installed runtime and, optionally, a mission before starting work:
+
+```bash
+tugboat doctor
+tugboat doctor --dir /path/to/project/tugboat --json
+```
+
+Doctor verifies Node compatibility, package and payload integrity, mission protocol,
+event replay, snapshot agreement, and lock state. It is read-only. Healthy reports exit
+zero; actionable integrity, migration, or lock findings exit two.
 
 Vendor the same pinned runtime and its least-privilege workflow into a repository:
 

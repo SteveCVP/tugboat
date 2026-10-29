@@ -111,7 +111,7 @@ test("exports a neutral freestanding repository from the public allowlist", () =
 
   assert.equal(result.destinationDir, fs.realpathSync(destination));
   assert.equal(result.packageName, "tugboat-mission-control");
-  assert.equal(result.version, "4.1.1");
+  assert.equal(result.version, "4.2.0");
   assert.equal(packageJson.name, "tugboat-mission-control");
   assert.equal(packageJson.private, false);
   assert.equal(packageJson.license, "MIT");
@@ -122,9 +122,10 @@ test("exports a neutral freestanding repository from the public allowlist", () =
   assert.ok(fs.existsSync(path.join(destination, "docs", "release-audit-4.0.0.md")));
   assert.ok(fs.existsSync(path.join(destination, "docs", "release-audit-4.1.0.md")));
   assert.ok(fs.existsSync(path.join(destination, "docs", "release-audit-4.1.1.md")));
+  assert.ok(fs.existsSync(path.join(destination, "docs", "release-audit-4.2.0.md")));
   assert.equal(fs.existsSync(path.join(destination, "tugboat")), false);
   assert.equal(fs.existsSync(path.join(destination, "tugboat-external-release")), false);
-  assert.deepEqual(fs.readdirSync(path.join(destination, "docs")), ["release-audit-4.0.0.md", "release-audit-4.1.0.md", "release-audit-4.1.1.md"]);
+  assert.deepEqual(fs.readdirSync(path.join(destination, "docs")), ["release-audit-4.0.0.md", "release-audit-4.1.0.md", "release-audit-4.1.1.md", "release-audit-4.2.0.md"]);
   assert.equal(fs.existsSync(path.join(destination, ".git")), false);
 
   const ci = fs.readFileSync(path.join(destination, ".github", "workflows", "ci.yml"), "utf8");
@@ -261,12 +262,13 @@ test("generated repository tests, packages, and installs independently", { skip:
   assert.ok(packedFiles.has("docs/release-audit-4.0.0.md"));
   assert.ok(packedFiles.has("docs/release-audit-4.1.0.md"));
   assert.ok(packedFiles.has("docs/release-audit-4.1.1.md"));
+  assert.ok(packedFiles.has("docs/release-audit-4.2.0.md"));
   assert.ok([...packedFiles].every((file) => !file.startsWith("tugboat/")));
 
   const home = temporaryDestination("home");
   fs.mkdirSync(home);
   const installed = JSON.parse(run(process.execPath, ["scripts/install.mjs", "--source", destination, "--home", home, "--targets", "agents,claude,codex", "--json"], destination).stdout);
-  assert.equal(installed.version, "4.1.1");
+  assert.equal(installed.version, "4.2.0");
   assert.equal(installed.installed.length, 3);
   for (const relative of [[".agents"], [".claude"], [".codex"]]) {
     const runtime = path.join(home, ...relative, "skills", "tugboat");
