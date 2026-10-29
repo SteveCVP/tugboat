@@ -1,6 +1,6 @@
 {
   "name": "tugboat-mission-control",
-  "version": "4.0.0",
+  "version": "5.0.0-alpha.1",
   "description": "Portable, fail-closed mission control for agentic software delivery",
   "type": "module",
   "bin": {
@@ -13,6 +13,7 @@
     "templates/",
     "references/",
     "docs/release-audit-4.0.0.md",
+    "docs/release-audit-5.0.0-alpha.1.md",
     "SKILL.md",
     "README.md",
     "MANIFEST.md",

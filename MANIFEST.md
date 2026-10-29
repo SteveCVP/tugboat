@@ -6,6 +6,7 @@
 - `README.md`: human orientation and quick start.
 - `starter-prompts.md`: concise prompts for new, resumed, deadline-bound, and Sasha-paired missions.
 - `docs/release-audit-4.0.0.md`: public capability, security, portability, and verification inventory for the 4.0 release.
+- `docs/release-audit-5.0.0-alpha.1.md`: exact shipped scope, limits, and verification inventory for the certified-changeset prerelease.
 
 ## References
 
@@ -43,6 +44,16 @@
 - `scripts/lib/adapter-sdk.mjs`: digest-pinned capability broker, direct execution, and deterministic conformance.
 - `scripts/lib/history-debugger.mjs`: exact-revision event replay and requirement causal explanations.
 - `scripts/lib/differential-review.mjs`: exact-input structured review consensus, divergence, and evidence-gap compilation.
+- `scripts/lib/boundary-manifest.mjs`: canonical ownership, interface, invariant, gate, and disclosure boundaries with source-digest verification.
+- `scripts/lib/analyzer-protocol.mjs`: bounded, digest-pinned compatibility-analyzer request and report protocol.
+- `scripts/analyzers/`: certified language, API, data, workflow, infrastructure, and image-boundary analyzers with conformance fixtures.
+- `scripts/lib/effect-footprint.mjs`: deterministic Git and analyzer effect derivation with typed uncertainty.
+- `scripts/lib/non-interference.mjs`: path, dependency, interface, schema, infrastructure, and proof-interference witnesses.
+- `scripts/lib/certified-changeset.mjs`: candidate, boundary, effect, invalidation, and evidence binding into verifiable certificates.
+- `scripts/lib/bundle-algebra.mjs`: pairwise commutativity matrices and deterministic multi-bundle composition order.
+- `scripts/lib/hermetic-runner.mjs`: disposable-worktree execution with bounded argv, environment, output, and repository observations.
+- `scripts/lib/composition.mjs`: prepared composition, target revalidation, authorization, merge certificates, and immutable mission records.
+- `scripts/lib/rollback-equivalence.mjs`: exact or declared rollback execution, semantic obligation accounting, and repository-backed verification.
 - `scripts/install.mjs`: atomic shared/Claude/Codex skill installer.
 - `scripts/lib/bundle.mjs`: immutable multimodal bundle creation, validation, signing, redacted inspection, and candidate comparison.
 - `scripts/lib/promotion.mjs`: requirement mapping, impact planning, disposable-worktree application, target-owned validation, and atomic fast-forward promotion.

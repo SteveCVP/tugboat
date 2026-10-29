@@ -101,7 +101,7 @@ test("installer puts the same versioned payload in shared, Claude, and Codex ski
   const result = installTugboat({ sourceDir: ROOT, home, targets: ["agents", "claude", "codex"] });
   assert.equal(result.installed.length, 3);
   const manifests = result.installed.map((dir) => JSON.parse(fs.readFileSync(path.join(dir, ".tugboat-install.json"), "utf8")));
-  assert.deepEqual(new Set(manifests.map((item) => item.version)), new Set(["4.0.0"]));
+  assert.deepEqual(new Set(manifests.map((item) => item.version)), new Set(["5.0.0-alpha.1"]));
   assert.equal(new Set(manifests.map((item) => item.payloadDigest)).size, 1);
   for (const dir of result.installed) {
     assert.ok(fs.existsSync(path.join(dir, "SKILL.md")));
