@@ -6,7 +6,8 @@
 - `README.md`: human orientation and quick start.
 - `starter-prompts.md`: concise prompts for new, resumed, deadline-bound, and Sasha-paired missions.
 - `docs/release-audit-4.0.0.md`: public capability, security, portability, and verification inventory for the 4.0 release.
-- `docs/release-audit-4.1.0.md`: exact shipped scope, limits, and verification inventory for the current certified-changeset release.
+- `docs/release-audit-4.1.0.md`: exact certified-changeset scope, limits, and verification inventory for the 4.1 feature release.
+- `docs/release-audit-4.1.1.md`: exact compatibility fix and verification inventory for the current patch release.
 
 ## References
 

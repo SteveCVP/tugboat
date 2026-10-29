@@ -734,8 +734,20 @@ function v2MissionDir(args) {
   die("Missing --dir or --ledger");
 }
 
-function handleStatusV2(args) {
+function statusMissionDir(args) {
   const dir = v2MissionDir(args);
+  const ledgerPath = path.join(dir, "requirement-ledger.md");
+  if (!fs.existsSync(path.join(dir, "state.json")) && fs.existsSync(ledgerPath)) {
+    const protocolVersion = field(fs.readFileSync(ledgerPath, "utf8"), "Protocol version");
+    if (protocolVersion && protocolVersion !== "2.0") {
+      die(`Legacy Tugboat ${protocolVersion} mission detected at ${dir}. Migration is required for status and next. Run: tugboat migrate --legacy-dir ${JSON.stringify(dir)} --dir <new-mission-dir>`);
+    }
+  }
+  return dir;
+}
+
+function handleStatusV2(args) {
+  const dir = statusMissionDir(args);
   const state = replayEvents(dir, { reducer: missionReducer }).state;
   const stored = readState(dir);
   if (!stored || stored.lastEventHash !== state.lastEventHash || stored.revision !== state.revision) die("state.json does not match event replay");
@@ -759,7 +771,7 @@ function handleStatusV2(args) {
 }
 
 function handleNextV2(args) {
-  const dir = v2MissionDir(args);
+  const dir = statusMissionDir(args);
   const state = replayEvents(dir, { reducer: missionReducer }).state;
   const stored = readState(dir);
   if (!stored || stored.lastEventHash !== state.lastEventHash || stored.revision !== state.revision) die("state.json does not match event replay");

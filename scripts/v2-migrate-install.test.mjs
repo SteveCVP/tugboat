@@ -80,6 +80,27 @@ test("init defaults to protocol 2 while protocol 1.1 remains an explicit compati
   assert.match(fs.readFileSync(path.join(dir, "tugboat-v1", "requirement-ledger.md"), "utf8"), /Protocol version: `1\.1`/);
 });
 
+test("status and next direct legacy missions to migration without rewriting them", () => {
+  const dir = repo();
+  execFileSync(process.execPath, initArgs(dir, "legacy", ["--legacy"]), { cwd: dir });
+  const legacyDir = path.join(dir, "legacy");
+  const before = Object.fromEntries(fs.readdirSync(legacyDir).sort().map((file) => [
+    file,
+    fs.readFileSync(path.join(legacyDir, file)),
+  ]));
+
+  for (const command of ["status", "next"]) {
+    const result = spawnSync(process.execPath, [CLI, command, "--dir", legacyDir], { cwd: dir, encoding: "utf8" });
+    assert.equal(result.status, 2, `${command}: ${result.stderr}`);
+    assert.match(result.stderr, /Legacy Tugboat 1\.1 mission/i);
+    assert.match(result.stderr, /tugboat migrate --legacy-dir/i);
+    assert.doesNotMatch(result.stderr, /state\.json does not match event replay/i);
+    for (const [file, contents] of Object.entries(before)) {
+      assert.deepEqual(fs.readFileSync(path.join(legacyDir, file)), contents, `${command} changed ${file}`);
+    }
+  }
+});
+
 test("legacy migration preserves every requirement, preservation, and audit entry but resets prose proof", () => {
   const dir = repo();
   execFileSync(process.execPath, initArgs(dir, "legacy", ["--legacy"]), { cwd: dir });
@@ -101,7 +122,7 @@ test("installer puts the same versioned payload in shared, Claude, and Codex ski
   const result = installTugboat({ sourceDir: ROOT, home, targets: ["agents", "claude", "codex"] });
   assert.equal(result.installed.length, 3);
   const manifests = result.installed.map((dir) => JSON.parse(fs.readFileSync(path.join(dir, ".tugboat-install.json"), "utf8")));
-  assert.deepEqual(new Set(manifests.map((item) => item.version)), new Set(["4.1.0"]));
+  assert.deepEqual(new Set(manifests.map((item) => item.version)), new Set(["4.1.1"]));
   assert.equal(new Set(manifests.map((item) => item.payloadDigest)).size, 1);
   for (const dir of result.installed) {
     assert.ok(fs.existsSync(path.join(dir, "SKILL.md")));

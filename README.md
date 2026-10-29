@@ -1,6 +1,6 @@
 # Tugboat
 
-**Current release: 4.1.0**
+**Current release: 4.1.1**
 
 Tugboat is portable mission control for consequential software builds. It turns an
 approved requirement ledger into bounded work, durable evidence, and release decisions
@@ -9,9 +9,11 @@ is dependency-free Node 20+ and keeps proof separate from generation.
 
 The 4.1 release adds owned boundaries, deterministic effect analysis,
 non-interference witnesses, multi-candidate composition, merge certificates, and
-repository-backed rollback equivalence. See the
-[4.1.0 release audit](docs/release-audit-4.1.0.md) for the exact shipped surface,
-security boundaries, and explicit limitations.
+repository-backed rollback equivalence. Patch 4.1.1 also detects protocol 1.1 missions
+before `status` or `next`, returns explicit migration guidance, and leaves the legacy
+mission unchanged. See the [4.1.1 release audit](docs/release-audit-4.1.1.md) for the
+exact patch contract and the [4.1.0 release audit](docs/release-audit-4.1.0.md) for the
+underlying capability and security boundaries.
 
 ## Quick start
 

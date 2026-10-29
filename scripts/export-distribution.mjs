@@ -21,6 +21,7 @@ const PUBLIC_ENTRIES = [
   "evals",
   "docs/release-audit-4.0.0.md",
   "docs/release-audit-4.1.0.md",
+  "docs/release-audit-4.1.1.md",
 ];
 
 const joined = (...parts) => parts.join("");
