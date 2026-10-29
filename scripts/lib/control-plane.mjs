@@ -1,9 +1,8 @@
 import { canonicalJson, sha256 } from "./canonical.mjs";
 import { gitSnapshot } from "./evidence.mjs";
-import { readMissionState } from "./intelligence-core.mjs";
 import { activeRequirementIds, missionReducer } from "./reducer.mjs";
 import { renderMission } from "./render.mjs";
-import { appendEvent } from "./store.mjs";
+import { appendPreparedEvent } from "./store.mjs";
 
 const OPEN_STATUSES = new Set(["PENDING", "IN_PROGRESS", "BLOCKED"]);
 
@@ -128,8 +127,6 @@ export function compileExecutionPacket(state, { observedAt, git = null }) {
   return { ...body, packetDigest: `sha256:${sha256(canonicalJson(body))}` };
 }
 
-const missionState = readMissionState;
-
 function currentHead(state, dir) {
   return gitSnapshot(state.metadata.worktree, { excludePaths: [dir] }).sha;
 }
@@ -152,27 +149,25 @@ export function claimRequirements(dir, {
     throw new Error("Claim TTL must be an integer from 30 to 14400 seconds");
   }
   const acquiredAt = timestamp(now, "now");
-  const state = missionState(dir);
-  const head = currentHead(state, dir);
-  const result = appendEvent(dir, {
-    timestamp: new Date(acquiredAt).toISOString(),
-    type: "WORK_CLAIMED",
-    actor,
-    payload: {
-      claim: {
-        id,
-        holder,
-        requirementIds: [...requirementIds],
-        expiresAt: new Date(acquiredAt + ttlSeconds * 1000).toISOString(),
+  const result = appendPreparedEvent(dir, (state) => ({
+    input: {
+      timestamp: new Date(acquiredAt).toISOString(),
+      type: "WORK_CLAIMED",
+      actor,
+      payload: {
+        claim: {
+          id,
+          holder,
+          requirementIds: [...requirementIds],
+          expiresAt: new Date(acquiredAt + ttlSeconds * 1000).toISOString(),
+        },
       },
     },
-  }, {
-    reducer: missionReducer,
     expectedRevision: expectedRevision ?? state.revision,
     expectedHead,
-    currentHead: head,
-  });
-  renderMission(dir, result.state);
+    currentHead: currentHead(state, dir),
+    afterCommit: ({ state: committed }) => renderMission(dir, committed),
+  }), { reducer: missionReducer });
   return { ...result, claim: result.state.claims[id] };
 }
 
@@ -186,19 +181,17 @@ export function releaseClaim(dir, {
 }) {
   if (!claimId || !holder) throw new Error("Work release needs claimId and holder");
   const releasedAt = timestamp(now, "now");
-  const state = missionState(dir);
-  const head = currentHead(state, dir);
-  const result = appendEvent(dir, {
-    timestamp: new Date(releasedAt).toISOString(),
-    type: "WORK_RELEASED",
-    actor,
-    payload: { claimId, holder },
-  }, {
-    reducer: missionReducer,
+  const result = appendPreparedEvent(dir, (state) => ({
+    input: {
+      timestamp: new Date(releasedAt).toISOString(),
+      type: "WORK_RELEASED",
+      actor,
+      payload: { claimId, holder },
+    },
     expectedRevision: expectedRevision ?? state.revision,
     expectedHead,
-    currentHead: head,
-  });
-  renderMission(dir, result.state);
+    currentHead: currentHead(state, dir),
+    afterCommit: ({ state: committed }) => renderMission(dir, committed),
+  }), { reducer: missionReducer });
   return { ...result, claim: result.state.claims[claimId] };
 }

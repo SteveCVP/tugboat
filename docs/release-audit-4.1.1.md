@@ -20,9 +20,16 @@ Protocol 2 missions retain the existing fail-closed snapshot and event-replay ch
 The patch does not migrate a mission implicitly, rewrite prose proof as structured
 evidence, or weaken corruption detection.
 
+Claim and release operations also acquire the mission lock before inspecting replayed
+state, computing Git alignment, or rendering ledger projections. A concurrent loser now
+returns a truthful lock, claim-conflict, or stale-revision result instead of observing a
+writer's transient event/snapshot boundary. Event, snapshot, and generated Markdown
+updates for these operations remain ordered under the same lock.
+
 ## Verification inventory
 
 The release gate includes real-process protocol 1.1 `status` and `next` failures,
-byte-preservation checks, legacy migration retention and proof-reset checks, protocol 2
-state and continuity regressions, installed-runtime parity, neutral export, standalone
+byte-preservation checks, legacy migration retention and proof-reset checks, a
+deterministic lock-before-read regression, a two-process claim race, protocol 2 state
+and continuity regressions, installed-runtime parity, neutral export, standalone
 installation, package contents, the complete test suite, and CodeQL.

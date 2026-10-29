@@ -72,6 +72,52 @@ export function replayEvents(dir, { reducer = (state) => state, initialState = {
   return { events, state };
 }
 
+function appendReplayedEvent(dir, input, replayed, {
+  reducer,
+  expectedRevision,
+  expectedHead,
+  currentHead,
+  allowSecrets,
+}) {
+  if (expectedRevision !== undefined && expectedRevision !== replayed.state.revision) {
+    throw new Error(`Expected revision ${expectedRevision}, actual ${replayed.state.revision}`);
+  }
+  if (expectedHead !== undefined && currentHead !== expectedHead) {
+    throw new Error(`Expected Git HEAD ${expectedHead}, actual ${currentHead ?? "unknown"}`);
+  }
+  if (!allowSecrets) assertNoSecrets(input, "event");
+  const unsigned = {
+    id: input.id ?? randomUUID(),
+    sequence: replayed.state.revision + 1,
+    timestamp: input.timestamp ?? new Date().toISOString(),
+    actor: input.actor,
+    type: input.type,
+    payload: input.payload ?? {},
+    gitHead: currentHead,
+    previousHash: replayed.state.lastEventHash ?? ZERO_HASH,
+  };
+  const event = { ...unsigned, hash: sha256(canonicalJson(unsigned)) };
+  const reduced = reducer(replayed.state, event);
+  const state = {
+    ...reduced,
+    schemaVersion: reduced.schemaVersion ?? 2,
+    revision: event.sequence,
+    lastEventHash: event.hash,
+    updatedAt: event.timestamp,
+    ...(currentHead !== undefined ? { currentHead } : {}),
+  };
+  fs.mkdirSync(dir, { recursive: true });
+  const descriptor = fs.openSync(eventPath(dir), "a", 0o600);
+  try {
+    fs.writeSync(descriptor, `${canonicalJson(event)}\n`);
+    fs.fsyncSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  writeAtomic(statePath(dir), `${JSON.stringify(state, null, 2)}\n`);
+  return { event, state };
+}
+
 export function appendEvent(dir, input, {
   reducer = (state) => state,
   initialState = { schemaVersion: 2 },
@@ -80,45 +126,39 @@ export function appendEvent(dir, input, {
   currentHead,
   allowSecrets = false,
 } = {}) {
+  return withMissionLock(dir, () => appendReplayedEvent(
+    dir,
+    input,
+    replayEvents(dir, { reducer, initialState }),
+    { reducer, expectedRevision, expectedHead, currentHead, allowSecrets },
+  ));
+}
+
+export function appendPreparedEvent(dir, prepare, {
+  reducer = (state) => state,
+  initialState = { schemaVersion: 2 },
+  allowSecrets = false,
+} = {}) {
+  if (typeof prepare !== "function") throw new Error("Prepared event needs a prepare function");
   return withMissionLock(dir, () => {
     const replayed = replayEvents(dir, { reducer, initialState });
-    if (expectedRevision !== undefined && expectedRevision !== replayed.state.revision) {
-      throw new Error(`Expected revision ${expectedRevision}, actual ${replayed.state.revision}`);
+    const stored = readState(dir);
+    if (!stored) throw new Error("Missing state.json snapshot");
+    if (canonicalJson(stored) !== canonicalJson(replayed.state)) throw new Error("state.json does not match event replay");
+    const prepared = prepare(replayed.state);
+    if (!prepared || typeof prepared !== "object" || !prepared.input) throw new Error("Prepared event must provide input");
+    if (prepared.afterCommit !== undefined && typeof prepared.afterCommit !== "function") {
+      throw new Error("Prepared event afterCommit must be a function");
     }
-    if (expectedHead !== undefined && currentHead !== expectedHead) {
-      throw new Error(`Expected Git HEAD ${expectedHead}, actual ${currentHead ?? "unknown"}`);
-    }
-    if (!allowSecrets) assertNoSecrets(input, "event");
-    const unsigned = {
-      id: input.id ?? randomUUID(),
-      sequence: replayed.state.revision + 1,
-      timestamp: input.timestamp ?? new Date().toISOString(),
-      actor: input.actor,
-      type: input.type,
-      payload: input.payload ?? {},
-      gitHead: currentHead,
-      previousHash: replayed.state.lastEventHash ?? ZERO_HASH,
-    };
-    const event = { ...unsigned, hash: sha256(canonicalJson(unsigned)) };
-    const reduced = reducer(replayed.state, event);
-    const state = {
-      ...reduced,
-      schemaVersion: reduced.schemaVersion ?? 2,
-      revision: event.sequence,
-      lastEventHash: event.hash,
-      updatedAt: event.timestamp,
-      ...(currentHead !== undefined ? { currentHead } : {}),
-    };
-    fs.mkdirSync(dir, { recursive: true });
-    const descriptor = fs.openSync(eventPath(dir), "a", 0o600);
-    try {
-      fs.writeSync(descriptor, `${canonicalJson(event)}\n`);
-      fs.fsyncSync(descriptor);
-    } finally {
-      fs.closeSync(descriptor);
-    }
-    writeAtomic(statePath(dir), `${JSON.stringify(state, null, 2)}\n`);
-    return { event, state };
+    const result = appendReplayedEvent(dir, prepared.input, replayed, {
+      reducer,
+      expectedRevision: prepared.expectedRevision,
+      expectedHead: prepared.expectedHead,
+      currentHead: prepared.currentHead,
+      allowSecrets,
+    });
+    if (prepared.afterCommit) prepared.afterCommit(result);
+    return result;
   });
 }
 

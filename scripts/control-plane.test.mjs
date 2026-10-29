@@ -206,6 +206,38 @@ test("claim acquisition is replayable, rendered, and blocks overlapping work ato
   assert.deepEqual(missionBytes(missionDir), before);
 });
 
+test("claim and release acquire the mission lock before inspecting mutable state", () => {
+  const { missionDir } = createClaimMission();
+  const stateFile = path.join(missionDir, "state.json");
+  const originalState = fs.readFileSync(stateFile, "utf8");
+  const transientState = JSON.parse(originalState);
+  transientState.revision += 1;
+  fs.writeFileSync(stateFile, `${JSON.stringify(transientState, null, 2)}\n`);
+
+  const lock = path.join(missionDir, ".tugboat-lock");
+  fs.mkdirSync(lock);
+  fs.writeFileSync(path.join(lock, "owner.json"), `${JSON.stringify({ pid: process.pid, hostname: os.hostname() })}\n`);
+  try {
+    assert.throws(() => claimRequirements(missionDir, {
+      id: "LOCKED-CLAIM",
+      holder: "worker",
+      requirementIds: ["R1"],
+      ttlSeconds: 60,
+      actor: { name: "Worker", kind: "agent", runtime: "test" },
+      now: OBSERVED_AT,
+    }), /locked/i);
+    assert.throws(() => releaseClaim(missionDir, {
+      claimId: "MISSING",
+      holder: "worker",
+      actor: { name: "Worker", kind: "agent", runtime: "test" },
+      now: OBSERVED_AT,
+    }), /locked/i);
+  } finally {
+    fs.rmSync(lock, { recursive: true, force: true });
+    fs.writeFileSync(stateFile, originalState);
+  }
+});
+
 test("two real processes racing for one requirement produce exactly one durable winner", async () => {
   const { repo, missionDir } = createClaimMission();
   const common = ["--dir", missionDir, "--holder", "race-worker", "--requirements", "R1", "--ttl-seconds", "60", "--json"];
