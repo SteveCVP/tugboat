@@ -1,11 +1,11 @@
-# Tugboat 5.0.0-alpha.1 Release Audit
+# Tugboat 4.1.0 Release Audit
 
 ## Release status
 
-This prerelease ships the certified-changeset core from the Tugboat 5 design. It is
-usable for boundary verification, candidate certification, commutativity analysis,
-composition admission, merge authorization, and rollback-equivalence proof. It does
-not claim the remaining Tugboat 5 roadmap is complete.
+Tugboat 4.1.0 is the stable certified-changeset release. It supports boundary
+verification, candidate certification, commutativity analysis, composition admission,
+merge authorization, and rollback-equivalence proof while preserving the Tugboat 4.0
+mission, intelligence, and proof-runtime surfaces.
 
 ## Shipped contract
 
@@ -35,14 +35,13 @@ not claim the remaining Tugboat 5 roadmap is complete.
 - MCP can verify repository-backed certificates but cannot execute rollback, apply
   composition, sign artifacts, or widen its startup authority.
 
-## Explicitly not in this prerelease
+## Out of scope
 
-The final Tugboat 5 roadmap still includes a new selective-disclosure trust layer,
-transparency publication, a mission model checker, agent flight recording, an MCP chaos
-laboratory, a compiled merge-policy language, a rendered blast-radius proof graph, and
-a proof-quality benchmark. Existing Tugboat 4 signing, provenance, intelligence, and
-history features remain available; they are not represented as completion of those new
-Tugboat 5 workstreams.
+This release does not provide a hosted control plane, autonomous agent dispatch,
+implicit merge or rollback, general-purpose static analysis, or a guarantee that a
+certificate replaces target-owned tests, deployment checks, or production observation.
+Those boundaries are deliberate: Tugboat coordinates and verifies explicit authority;
+it does not manufacture authority or correctness from agent output.
 
 ## Security and portability
 
@@ -64,4 +63,5 @@ schema/data/infrastructure/external obligations, missing evidence, drift, tamper
 replace refs, grafts, output races, unowned paths, composition admission, immutable
 history, CLI journeys, read-only MCP parity, neutral export, standalone install, package
 contents, complete regression, and CodeQL. Passing tests prove those checked contracts;
-they do not upgrade a prerelease or an unimplemented roadmap item into a shipped claim.
+they do not upgrade an unverified environment or an out-of-scope capability into a
+shipped claim.

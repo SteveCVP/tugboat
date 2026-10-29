@@ -1,18 +1,17 @@
 # Tugboat
 
-**Current release: 5.0.0-alpha.1**
+**Current release: 4.1.0**
 
 Tugboat is portable mission control for consequential software builds. It turns an
 approved requirement ledger into bounded work, durable evidence, and release decisions
 that Claude Code, Codex, a developer shell, and CI can verify the same way. The runtime
 is dependency-free Node 20+ and keeps proof separate from generation.
 
-The 5.0 alpha adds the certified-changeset core: owned boundaries, deterministic effect
-analysis, non-interference witnesses, multi-candidate composition, merge certificates,
-and repository-backed rollback equivalence. It is a prerelease, not a claim that the
-entire Tugboat 5 roadmap is complete. See the
-[5.0.0-alpha.1 release audit](docs/release-audit-5.0.0-alpha.1.md) for the exact shipped
-surface and explicit exclusions.
+The 4.1 release adds owned boundaries, deterministic effect analysis,
+non-interference witnesses, multi-candidate composition, merge certificates, and
+repository-backed rollback equivalence. See the
+[4.1.0 release audit](docs/release-audit-4.1.0.md) for the exact shipped surface,
+security boundaries, and explicit limitations.
 
 ## Quick start
 
@@ -152,7 +151,7 @@ review. These are not extra dashboards or agent personas. They test whether a ga
 detect a declared defect, preserve the context needed to verify a result, and expose
 where independent reviewers or cached conclusions diverge.
 
-Tugboat 5.0 alpha adds certified changesets. It binds candidate effects to explicit
+Tugboat 4.1 adds certified changesets. It binds candidate effects to explicit
 component ownership, proves when independent bundles commute, executes admitted
 composition in disposable worktrees, and requires repository-backed rollback evidence
 when policy calls for it. Unknown semantic effects remain unknown; a certificate cannot

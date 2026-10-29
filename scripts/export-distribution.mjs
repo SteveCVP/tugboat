@@ -20,7 +20,7 @@ const PUBLIC_ENTRIES = [
   "templates",
   "evals",
   "docs/release-audit-4.0.0.md",
-  "docs/release-audit-5.0.0-alpha.1.md",
+  "docs/release-audit-4.1.0.md",
 ];
 
 const joined = (...parts) => parts.join("");
